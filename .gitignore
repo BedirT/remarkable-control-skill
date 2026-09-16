@@ -1,0 +1,8 @@
+*.png
+*.raw
+fb.raw
+screenshot.png
+__pycache__/
+*.pyc
+*.pyo
+rm-shot-*
