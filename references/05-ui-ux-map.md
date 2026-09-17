@@ -7,31 +7,34 @@ confirm on-device before pixel-driving).
 
 Paper Pro deltas are flagged inline and **never mixed** into rM2 procedures.
  > Evidence 2026-09-17/18: taps + swipes WORKING via `/tmp/rm-input`
- > over SSH (static helper, screen coords, Y flip internal), ~40 acts
+ > over SSH (static helper, screen coords, Y flip internal), ~50 acts
  > every one screenshot-verified.
- > VERIFIED: home map; tile tap opens doc at last-viewed page; X
- > top-right (~1345,50) closes doc AND PDF views; home grid scrolls,
- > restores byte-exact; 13-icon toolbar with tap positions (§4.1);
- > hamburger drawer contents; sort options + active-row direction
- > toggle + outside-tap dismiss; search overlay + keyboard + Back;
- > + button → Create dialog (Notebook/Folder/Quick sheet); calendar
- > pill → offline toast; tag sheet (existing tag + New tag); ⋮ menu
- > (Email/Convert and Share/Present with Screen Share); page
- > navigator (Go to page, thumbs, current mark, Medium-grid toggle) +
- > thumbnail jump = deterministic page turn; Trash browser; Settings
- > tree + General/Display/Accessibility contents; tile labels track
+ > VERIFIED: home map (multi-scroll); tile tap opens doc at last-viewed
+ > page; X top-right (~1345,50) closes doc AND PDF views; home grid
+ > scrolls, restores byte-exact; 13-icon toolbar with tap positions
+ > (§4.1); hamburger drawer contents; sort options + active-row
+ > direction toggle + outside-tap dismiss; search overlay + keyboard +
+ > Back; + button → Create dialog (Notebook/Folder/Quick sheet);
+ > calendar pill → offline toast; tag sheet; ⋮ menu (Email/Convert and
+ > Share/Present with Screen Share); page navigator + thumbnail jump =
+ > deterministic page turn; Trash browser; Settings tree +
+ > General/Display/Accessibility contents; tile labels track
  > last-viewed page; overlay round-trips reset grid scroll to top.
- > CORRECTION 2026-09-18: the "swipe creates page" claim is WITHDRAWN
- > (batched test, uncertain tile). Isolated tests: synthetic swipes are
- > NO-OP in doc view — notebook mid-page, notebook fast flick, PDF
- > mid-page, PDF edge (all byte-exact no-change). The black add-page
- > button exists (photographed twice) but its trigger is UNCONFIRMED.
+ > PAGE-CREATE STATUS: owner flow is double-swipe on last page (button
+ > appears, second swipe creates; works notebook AND PDF). 6 synthetic
+ > variants all byte-exact NO-OP on CONFIRMED last pages
+ > (navigator-verified Notebook 19 p2/2, readalong33 p5/5): notebook
+ > mid-page, notebook fast flick, PDF mid-page, PDF edge, notebook
+ > double, PDF double. Likely cause: contact fidelity (constant
+ > pressure/size/timing vs ramping finger). The button ALSO sits
+ > permanently in the page navigator. Trigger + tap UNCONFIRMED —
+ > do not script page creation.
  > NOT verified: add-page button tap, tool-switch taps, undo/redo,
  > layers panel, template-grid icon (no-op in PDF), Guides/Help/Wi-Fi/
  > Cloud/Security subs, per-file Trash delete/restore, auto-sleep
  > setting location, keyboard typing (photographed, never typed),
  > swipe-down-from-top (still DISPUTED, do not script).
- > RELIABILITY: one tap in ~40 was silently swallowed by Qt (ok-printed
+ > RELIABILITY: one tap in ~50 was silently swallowed by Qt (ok-printed
  > but no effect). NEVER trust "ok" — verify every act by screenshot.
 
 ## 1. Canvas and hardware frame
@@ -134,11 +137,16 @@ Overlays (from any screen): Share/export · Document settings ·
   marked, Medium-grid density toggle top-right. Tapping a thumbnail
   jumps deterministically (verified p9 → p5). USE THIS, not swipes.
  - **Swipe page turn: NO-OP for synthetic swipes** (all byte-exact
-  no-change): notebook mid-page, notebook fast flick (12×8ms), PDF
-  mid-page, PDF from right edge. Human-finger trigger unknown.
+  no-change on CONFIRMED last pages): notebook mid-page, notebook fast
+  flick (12×8ms), PDF mid-page, PDF from right edge, notebook
+  double-swipe, PDF double-swipe. Suspected cause: contact fidelity
+  (constant pressure/size vs ramping finger).
  - **Add-page button:** black circle, white page-plus icon, mid-right
-  (~1225,990). Photographed twice on blank last pages. Trigger +
-  tap both UNCONFIRMED — do not script page creation.
+  (~1225,990) on blank last pages; ALSO permanently in the page
+  navigator corner. Photographed ×3. Owner flow (double-swipe reveals,
+  second swipe creates, notebook + PDF) works by finger but all 6
+  synthetic variants no-op — trigger + tap UNCONFIRMED, do not script
+  page creation.
 
 ## 3. Overlays
 
@@ -215,8 +223,8 @@ Shared rules:
  | Toolbar tag ≈(48,1618) | Doc view | Tag sheet: existing tags + New tag [VERIFIED] |
  | Toolbar ⋮ ≈(48,1749) | Doc view | Menu: Email / Convert and Share / Present with Screen Share [VERIFIED] |
  | Toolbar template-grid | PDF view | NO-OP (likely notebook-only) [VERIFIED] |
- | Synthetic swipe (any: mid/fast/edge) | Doc / PDF last page | NO-OP, byte-exact (×4 isolated tests) [VERIFIED] |
- | Add-page button (~1225,990) | Blank last page | Photographed ×2; trigger + tap UNCONFIRMED — do not script |
+ | Synthetic swipe (mid/fast/edge/double ×6) | Confirmed last pages (notebook p2/2, PDF p5/5) | NO-OP, byte-exact every time [VERIFIED] |
+ | Add-page button (~1225,990 canvas; navigator corner) | Blank last page / navigator | Photographed ×3; owner double-swipe flow works by finger; synthetic trigger + tap UNCONFIRMED — do not script |
  | Swipe down from top edge | Document view | [DISPUTED by owner — do not script] Alleged: closes document / reveals menu. Contradictory as written; needs screenshot proof. |
 | Tap corner | Document view | Toggles bookmark on current page |
 | Long-press corner | Document view | Edits bookmark description |
@@ -244,10 +252,6 @@ them). Long-press suspend behavior is systemd/logind policy on top of
 - **EPUB:** converted to PDF internally on import. **Reformat
   regenerates the PDF and orphans existing strokes** — stock firmware
   shows a warning; automation MUST confirm destructive reformats via
-  screenshot verify, never blind-tap.
-- **Annotation layer:** separate hide/show toggle; hiding it shows the
-  clean base document.
-- **Folders vs tags:** hybrid organization — folders in the file tree
   plus favorites/tags; official guide recommends folders for structure,
   tags/favorites for cross-cutting sets.
 
