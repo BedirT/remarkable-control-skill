@@ -10,10 +10,12 @@ Paper Pro deltas are flagged inline and **never mixed** into rM2 procedures.
  > over SSH (static helper, screen coords, Y flip internal), every act
  > screenshot-verified. VERIFIED: home map §2.1; tile tap opens notebook at
  > last-viewed page; X top-right (~1345,50) closes doc; home grid scrolls
- > vertically and restores byte-exact; doc toolbar is 13 icons (§4.1).
- > NOT verified: hamburger menu contents, bottom-pill actions, page-turn
- > swipe (mid-page horizontal swipe was a no-op on the last page —
- > edge-swipe untested), swipe-down-from-top (still DISPUTED, do not script).
+ > vertically and restores byte-exact; doc toolbar is 13 icons (§4.1);
+ > last-page right-to-left swipe opens a blank page + black add-page
+ > button (~1225,990), empty page dropped on close.
+ > NOT verified: hamburger menu contents, bottom-pill actions, add-page
+ > button tap, edge-origin swipes, swipe-down-from-top (still DISPUTED,
+ > do not script).
 
 ## 1. Canvas and hardware frame
 
@@ -89,9 +91,12 @@ reference until re-verified; do not drive pixel paths from it.
   tag, share/export, ⋮ more. Active tool shows a dot; selected tool gets
   a black tile.
  - **Top doc menu:** no title bar on the canvas — close is X only.
- - **Bottom page navigator:** page-turn swipe NOT confirmed: a mid-page
-  right-to-left swipe was a no-op on the last page of a 6-page notebook;
-  edge-swipe untested. Use the navigator UI once its tap targets are mapped.
+ - **Bottom page navigator / page turn:** swiping right-to-left mid-page
+  on the LAST notebook page opens a new blank page AND reveals a black
+  circular add-page button (white page-plus icon) at mid-right (~1225,990).
+  Tapping it adds the page explicitly; swiping again also creates it.
+  Closing with the page still empty drops it (home tile still read
+  "Page 6 of 6"). [VERIFIED 2026-09-17.] Edge-origin swipes untested.
 
 ## 3. Overlays
 
@@ -148,11 +153,11 @@ Shared rules:
 
 ## 5. Gesture table
 
- | Gesture | Context | Effect |
- |---|---|---|
  | Tap document tile | My files grid | Opens doc at last-viewed page [VERIFIED 2026-09-17] |
  | Tap X top-right (~1345,50) | Document view | Closes to home [VERIFIED 2026-09-17] |
  | Vertical swipe | My files grid | Scrolls; reverse swipe restores byte-exact [VERIFIED 2026-09-17] |
+ | Swipe right-to-left (mid-page) | Notebook last page | New blank page + black add-page button (~1225,990); empty page dropped on close [VERIFIED 2026-09-17] |
+ | Tap add-page button | New blank page | Adds the page explicitly [per owner; tap untested] |
  | Swipe down from top edge | Document view | [DISPUTED by owner — do not script] Alleged: closes document / reveals menu. Contradictory as written; needs screenshot proof. |
 | Tap corner | Document view | Toggles bookmark on current page |
 | Long-press corner | Document view | Edits bookmark description |
