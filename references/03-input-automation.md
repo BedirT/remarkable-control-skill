@@ -274,7 +274,11 @@ is swallowed by the app and kills the WHOLE stroke (zero ink, acked
 normally — seen twice). Trail reads as a natural pen touchdown.
 The kernel delivers only CHANGED values per frame to readers
 (captured: constant X / pressure-1 appear once) — frame COUNT is
-what warms the filter, not value traffic.
+what warms the filter, not value traffic. Same-session 4-mode ladder
+(M0/M1/M2/M3 short lines back-to-back): zero jog dips in ALL modes,
+wobble 0.3–0.5 px, identical ink totals — so the daemon defaults to
+M1 (packed + absolute cadence, no drift); M2 doubles frames for the
+same ink, M3 tremor adds nothing measurable.
 
 ## 5d. Input device lifecycle (hard rule — silent strokes otherwise)
 

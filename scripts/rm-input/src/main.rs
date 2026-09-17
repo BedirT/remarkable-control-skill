@@ -926,7 +926,11 @@ fn main() {
         unsafe { libc::mkfifo(c.as_ptr(), 0o600) };
         let fd = create_pen_device();
         println!("pend ready {}", fifo);
-        let mut mode = 0;
+        // Default M1 (packed frame + absolute cadence): same ink as M0
+        // in the 4-mode same-session ladder (zero jog dips in all
+        // modes, wobble 0.3–0.5 px) with no drift pile-up. M2 doubles
+        // frames for identical ink; M3 tremor adds nothing measurable.
+        let mut mode = 1;
         let mut buf = [0u8; 4096];
         loop {
             let rfd = open(fifo, libc::O_RDONLY);
