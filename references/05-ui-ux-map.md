@@ -222,7 +222,7 @@ Shared rules:
  | Pill calendar ~(813,1683) | Home | Offline toast (cloud-gated) [VERIFIED] |
  | Synthetic swipe, big touch (size 40) | Doc last page | Palm-rejected, NO-OP 0/2 [VERIFIED] |
  | Synthetic swipe, finger sizes (minor 8/17) | Doc last page, any zone | Creates page per pair, incl. old failing shape [VERIFIED] |
- | Synthetic pen stroke (uinput clone, bit-identical caps) | Doc canvas | IGNORED — xochitl never opens hotplug pen nodes (03 §5b) [VERIFIED BLOCKED] |
+ | Synthetic pen stroke via `pend` daemon (held clone + `XOCHITL_DIGITIZER_PATH` override) | Doc canvas | INKS — calibrated map digX=(1871−y)×11.199, digY=x×11.199, see 03 §5b [VERIFIED 2026-09-18] |
  | Toolbar tag ≈(48,1618) | Doc view | Tag sheet: existing tags + New tag [VERIFIED] |
  | Toolbar ⋮ ≈(48,1749) | Doc view | Menu: Email / Convert and Share / Present with Screen Share [VERIFIED] |
  | Toolbar template-grid | PDF view | NO-OP (likely notebook-only) [VERIFIED] |

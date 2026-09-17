@@ -486,7 +486,7 @@ fn create_pen_device() -> RawFd {
     setup.vendor = 0x2d1f;
     setup.product = 0x0095;
     setup.version = 0x1231;
-    let name = b"rm2-pen-inject";
+    let name = b"Wacom I2C Digitizer";
     setup.name[..name.len()].copy_from_slice(name);
     if !ioctl(fd, UI_DEV_SETUP, &mut setup as *mut _ as *mut _) {
         unsafe { libc::close(fd) };
@@ -511,12 +511,12 @@ fn create_pen_device() -> RawFd {
     fd
 }
 
-// Screen (1404x1872 portrait) to digitizer mapping, hypothesis A:
-// digitizer X = screen Y * k, digitizer Y = screen X * k,
-// k = 20966/1872 = 15725/1404 = 11.199. Calibrate with penraw
-// if ink lands mirrored.
+// Screen (1404x1872 portrait) to digitizer mapping, CALIBRATED live
+// 2026-09-18 (5/5 dots exact): digitizer X = (1871 - screen Y) * k,
+// digitizer Y = screen X * k, k = 11.199. Same Y flip as touch.
+// Residual ±3px canvas offset uncorrected.
 fn map_pen(sx: i32, sy: i32) -> (i32, i32) {
-    (((clamp(sy, 0, 1871, "Y") as f64) * 11.199) as i32,
+    ((((1871 - clamp(sy, 0, 1871, "Y")) as f64) * 11.199) as i32,
      ((clamp(sx, 0, 1403, "X") as f64) * 11.199) as i32)
 }
 
@@ -727,9 +727,7 @@ fn main() {
     if args.len() >= 6 && (args[1] == "pen" || args[1] == "penraw") {
         let raw = args[1] == "penraw";
         // Screen coords (portrait 1404x1872) unless penraw (device coords).
-        // Mapping hypothesis A: digitizer X = screen Y * k, digitizer Y
-        // = screen X * k, k = 20966/1872 = 15725/1404 = 11.199.
-        // Calibrate with penraw if ink lands mirrored.
+        // Calibrated mapping in map_pen (same Y flip as touch).
         let (ax1, ay1, ax2, ay2) = (parse(&args, 2, "X1"), parse(&args, 3, "Y1"), parse(&args, 4, "X2"), parse(&args, 5, "Y2"));
         let steps = if args.len() > 6 { parse(&args, 6, "STEPS") } else { 24 };
         let step_ms = if args.len() > 7 { parse(&args, 7, "STEP_MS") as u64 } else { 12 };
@@ -741,10 +739,9 @@ fn main() {
             (clamp(ax1, 0, PEN_X_MAX, "DX1"), clamp(ay1, 0, PEN_Y_MAX, "DY1"),
              clamp(ax2, 0, PEN_X_MAX, "DX2"), clamp(ay2, 0, PEN_Y_MAX, "DY2"))
         } else {
-            (((clamp(ay1, 0, 1871, "Y1") as f64) * 11.199) as i32,
-             ((clamp(ax1, 0, 1403, "X1") as f64) * 11.199) as i32,
-             ((clamp(ay2, 0, 1871, "Y2") as f64) * 11.199) as i32,
-             ((clamp(ax2, 0, 1403, "X2") as f64) * 11.199) as i32)
+            let (a, b) = map_pen(ax1, ay1);
+            let (c, d) = map_pen(ax2, ay2);
+            (a, b, c, d)
         };
         let press = clamp(press, 1, PEN_PRESSURE_MAX, "PRESS");
         let fd = create_pen_device();
@@ -762,6 +759,81 @@ fn main() {
         msleep(secs * 1000);
         destroy(fd);
         println!("ok penhold");
+        return;
+    }
+
+    if args.len() >= 2 && args[1] == "pend" {
+        // FIFO daemon: ONE persistent pen node, strokes on demand.
+        // xochitl opens this node (via XOCHITL_DIGITIZER_PATH) and
+        // transient per-stroke nodes never reach it — so all ink
+        // must flow through here: `echo "S ..." > /tmp/pen.fifo`.
+        // Line format: S STEPS STEP_MS PRESS X1 Y1 [X2 Y2 ...]
+        // (screen coords); Q quits. One line per writer-open.
+        let fifo = "/tmp/pen.fifo";
+        let c = CString::new(fifo).unwrap();
+        unsafe { libc::mkfifo(c.as_ptr(), 0o600) };
+        let fd = create_pen_device();
+        println!("pend ready {}", fifo);
+        let mut buf = [0u8; 4096];
+        loop {
+            let rfd = open(fifo, libc::O_RDONLY);
+            if rfd < 0 {
+                msleep(200);
+                continue;
+            }
+            let mut data = Vec::new();
+            loop {
+                let n = unsafe { libc::read(rfd, buf.as_mut_ptr() as *mut _, buf.len()) };
+                if n <= 0 {
+                    break;
+                }
+                data.extend_from_slice(&buf[..n as usize]);
+            }
+            unsafe { libc::close(rfd) };
+            let text = String::from_utf8_lossy(&data);
+            let mut quit = false;
+            for ln in text.lines() {
+                let t = ln.trim();
+                if t.is_empty() {
+                    continue;
+                }
+                if t == "Q" {
+                    quit = true;
+                    break;
+                }
+                let p: Vec<&str> = t.split_whitespace().collect();
+                if p.len() < 8 || p[0] != "S" || (p.len() - 4) % 2 != 0 {
+                    continue;
+                }
+                let num = |i: usize| p[i].parse::<i32>().unwrap_or(-1);
+                let steps = num(1);
+                let step_ms = num(2);
+                let press = num(3);
+                if steps < 1 || steps > 2000 || step_ms < 0 || step_ms > 5000
+                    || press < 1 || press > PEN_PRESSURE_MAX {
+                    continue;
+                }
+                let mut pts = Vec::new();
+                let mut ok = true;
+                for w in p[4..].chunks(2) {
+                    let sx: i32 = w[0].parse().unwrap_or(-1);
+                    let sy: i32 = w[1].parse().unwrap_or(-1);
+                    if sx < 0 || sx > 1403 || sy < 0 || sy > 1871 {
+                        ok = false;
+                        break;
+                    }
+                    pts.push(map_pen(sx, sy));
+                }
+                if ok && pts.len() >= 2 {
+                    pen_stroke_multi(fd, &pts, steps, step_ms as u64, press);
+                }
+            }
+            if quit {
+                break;
+            }
+        }
+        destroy(fd);
+        println!("ok pend quit");
         return;
     }
 

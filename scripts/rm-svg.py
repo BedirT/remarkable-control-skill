@@ -2,7 +2,7 @@
 """rm-svg.py — SVG line art to reMarkable pen strokes.
 
 Parses <path>/<polyline>/<polygon> from an SVG file, fits the drawing
-into a canvas rectangle, and emits one `rm-input pen` command per
+into a canvas rectangle, and emits one FIFO `S` stroke line per
 subpath (pen-down stroke). Curves (C/S/Q/T/A) are flattened to
 polylines; every M starts a new stroke (pen lift between subpaths).
 
@@ -10,10 +10,12 @@ Usage:
     python3 scripts/rm-svg.py drawing.svg [--box X Y W H] [--press N]
     python3 scripts/rm-svg.py drawing.svg --run [--box ...] [--press ...]
 
---run executes each stroke over the existing USB SSH session
-(otherwise commands print to stdout for inspection). Needs the
-notebook page open with a pen tool selected; strokes land in SCREEN
-coords (1404x1872 portrait) via /tmp/rm-input on the tablet.
+--run feeds each stroke to the `pend` daemon's /tmp/pen.fifo over the
+existing USB SSH session (otherwise lines print to stdout). Needs the
+pend session live (03 §5b), the notebook page open with a pen tool
+selected; strokes land in SCREEN coords (1404x1872 portrait).
+--flip-y compensates a legacy inverted pend build (deviation, not the
+rule — current builds take plain screen coords).
 
 SVG y grows downward, same as the screen: no axis flip needed.
 """
@@ -149,11 +151,17 @@ def parse_path(d):
     if cur:
         subs.append(cur)
     return [s for s in subs if len(s) > 1]
-def stroke_cmds(sub, proj, press):
-    """One `penpoly` command per subpath (single pen-down pass)."""
+def stroke_cmds(sub, proj, press, flip_y=False):
+    """One FIFO `S` line per subpath (single pen-down pass).
+
+    Coords are correct screen pixels. flip_y compensates a legacy
+    pend build whose map is y-inverted (deviation, not the rule).
+    """
     out = []
     for path in sub:
         pts = [proj(x, y) for x, y in path]
+        if flip_y:
+            pts = [(x, SCREEN_H - 1 - y) for x, y in pts]
         # Split very long subpaths so no call exceeds ~60 points.
         for k in range(0, len(pts), 60):
             chunk = pts[k:k + 61]
@@ -165,7 +173,7 @@ def stroke_cmds(sub, proj, press):
             )
             steps = max(2, min(2000, int(total / 25) + 1))
             coords = " ".join(f"{int(x)} {int(y)}" for x, y in chunk)
-            out.append(f"/tmp/rm-input penpoly {steps} 12 {press} {coords}")
+            out.append(f"S {steps} 12 {press} {coords}")
     return out
 
 
@@ -194,7 +202,7 @@ def main(argv):
         return 2
     path = argv[0]
     box = [100, 200, SCREEN_W - 200, SCREEN_H - 400]
-    press, run = 1500, False
+    press, run, flip_y = 1500, False, False
     i = 1
     while i < len(argv):
         if argv[i] == "--box":
@@ -205,6 +213,9 @@ def main(argv):
             i += 2
         elif argv[i] == "--run":
             run = True
+            i += 1
+        elif argv[i] == "--flip-y":
+            flip_y = True
             i += 1
         else:
             i += 1
@@ -221,12 +232,19 @@ def main(argv):
     if not subs:
         print("no drawable paths found", file=sys.stderr)
         return 1
-    cmds = stroke_cmds(subs, proj, press)
+    cmds = stroke_cmds(subs, proj, press, flip_y)
     print(f"{len(subs)} subpaths -> {len(cmds)} strokes", file=sys.stderr)
     if run:
+        import time
         for c in cmds:
-            r = subprocess.run(SSH + [c], capture_output=True, text=True)
-            print(r.stdout.strip() or r.stderr.strip())
+            # One line per writer-open; the daemon draws it on the
+            # node xochitl holds. Sleep past the stroke duration.
+            r = subprocess.run(SSH + [f"echo {c!r} > /tmp/pen.fifo; sleep 1"],
+                               capture_output=True, text=True)
+            if r.returncode != 0:
+                print(r.stderr.strip(), file=sys.stderr)
+                return 1
+            time.sleep(2)
     else:
         for c in cmds:
             print(c)

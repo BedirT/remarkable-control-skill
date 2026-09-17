@@ -199,38 +199,54 @@ py = raw_y * 1872 // y_max   # maxima from EVIOCGABS / evtest caps
    cargo build --target armv7-unknown-linux-musleabihf
  ```
 
- Pen strokes ARE implemented (`pen`/`penraw`/`penpoly`, SVG via
- `scripts/rm-svg.py`) but BLOCKED at the input layer — see §5b.
+ Live ink path is the `pend` daemon (§5b): one held pen node,
+ strokes via `/tmp/pen.fifo`, SVG via `scripts/rm-svg.py --run`.
+ (`pen`/`penraw`/`penpoly` one-shots still exist as protocol
+ spares; the app never reads them.)
  Power control headless: `systemctl suspend` over SSH instead.
 
- ## 5b. Pen injection (BLOCKED 2026-09-18 — xochitl never opens hotplug pen nodes)
+ ## 5b. Pen injection (WORKING 2026-09-18 — persistent node + env override)
 
  The Wacom I2C Digitizer was fully probed (`--probe`: X 0..20966,
  Y 0..15725 res 100, PRESSURE 0..4095, DISTANCE 0..255,
  TILT ±9000; keys TOOL_PEN/TOOL_RUBBER/TOUCH/STYLUS/STYLUS2;
  ids bus 0x18 vendor 0x2d1f product 0x0095 version 0x1231).
- The helper clones all of it — `--probe` shows the clone
- bit-identical to the real node — and emits well-formed strokes
- (hover/proximity → TOUCH with position+pressure → lift; verified
- on the wire by reading the clone's own event node, 16-byte
- 32-bit input_event structs). Screen→digitizer mapping hypothesis:
- digX = screenY × 11.199, digY = screenX × 11.199 (`penraw` takes
- device coords for calibration).
+ The helper clones all of it. Qt has NO evdev tablet handler in
+ this build (zero `evdevtablet` strings in libQt6Gui) — xochitl
+ reads the pen through its own Digitizer thread, path from the
+ `XOCHITL_DIGITIZER_PATH` env var (found via binary strings).
 
- Result: ~12 strokes, zero ink, blank canvas every time. Root cause
- is NOT caps or framing — `/proc/<xochitl>/fd` shows xochitl opens
- hotplug FINGER clones immediately (fd 41 → new node) but never a
- pen node: not at 4 s, not over a 52 s hold, not during live strokes
- (0 opens at t8/t20/t30/t38). The Qt tablet path does not rescan;
- only a xochitl restart with a persistent node present could pick
- it up, and restarts are out of bounds. Tried and ruled out:
- generic name, exact name clone, I2C bus clone, ID clone,
- PROP_DIRECT on/off, TOUCH folded into first contact frame,
- pressure 1500 const, unique device name. `penhold SEC` keeps a
- node alive for `--probe` comparison; `scripts/rm-svg.py` turns
- SVG paths/polylines (M/L/H/V/C-curves flattened, Q elevated) into
- `penpoly` multi-point strokes and is tested host-side — it runs
- unchanged the day the pen path opens.
+ Three hard lessons, each proven live:
+
+ 1. Hotplug pen nodes are IGNORED. xochitl opens hotplug finger
+    clones instantly but never a pen node (0 opens over a 52 s
+    hold, nor during live strokes). ~12 strokes through transient
+    nodes: zero ink.
+ 2. Ink must flow through the HELD node. `pend` creates ONE pen
+    device and reads strokes from `/tmp/pen.fifo`
+    (`S STEPS STEP_MS PRESS X1 Y1 [X2 Y2 ...]`, screen coords;
+    `Q` quits). Transient `pen`/`penpoly` nodes never reach the
+    app — protocol spares only.
+ 3. Screen→digitizer mapping is digX = (1871−y)×11.199,
+    digY = x×11.199 — the SAME Y flip as touch (5/5 dots exact,
+    ±3 px). Hypothesis-no-flip drew mirrored; fixed in `map_pen`.
+
+ Session recipe (needs one xochitl restart; real pen is dead while
+ the override points at the clone — restore promptly):
+ `setsid nohup /tmp/rm-input pend … &`, note its eventN,
+ `systemctl set-environment XOCHITL_DIGITIZER_PATH=/dev/input/eventN`,
+ `systemctl restart xochitl`, verify `/proc/<pid>/fd` shows the
+ node, draw, then `systemctl unset-environment
+ XOCHITL_DIGITIZER_PATH` (separate command — `--unset` is invalid)
+ + `reset-failed` + restart and verify event1 is held again.
+ Keep restarts clear of StartLimitBurst=4/600s
+ (OnFailure=remarkable-fail.service); `reset-failed` first.
+
+ Real-pen ground truth (passive `cat /dev/input/event1` while the
+ owner draws): contact frame is TOUCH=1 + changed axes +
+ PRESSURE jump (no ramp, ~2900) + DISTANCE 8→0; tilt sparse;
+ 100–200 Hz; no MSC/STYLUS traffic.
+
 
 ## 6. xochitl coexistence
 
