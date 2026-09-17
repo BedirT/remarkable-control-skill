@@ -3,7 +3,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/reMarkable-2-black" alt="reMarkable 2" />
   <img src="https://img.shields.io/badge/transport-USB_SSH-blue" alt="transport: USB SSH" />
-  <img src="https://img.shields.io/badge/capture-zero_tablet_setup-green" alt="capture: zero tablet setup" />
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="license: MIT" />
 </p>
 
 An agent skill for controlling a reMarkable 2 tablet. It was born out of
@@ -17,8 +17,10 @@ the agent work. Useless to me, because the development I was doing
 restarts the tablet quite often and needs hands-off test suites.
 
 There was no API for any of this, so I reverse-engineered the whole path
-myself: how the screen is composed, where the pixels live, and how to pull
-them out over plain SSH with nothing installed on the tablet.
+under my own guidance, with my AI agents doing the heavy lifting (Codex
+Astra 6 and Meta Spark 1.3): how the screen is composed, where the
+pixels live, and how to pull them out over plain SSH with nothing installed
+on the tablet.
 
 So I did the investigation by hand and built this skill: a complete suite
 of tools and guidance for agents to reach the reMarkable 2 screen and all
@@ -29,13 +31,21 @@ develop for it.
 
 ## Why this exists
 
-Driving an e-ink tablet from an agent is unlike driving a phone or
-desktop: the panel is 1404 × 1872 monochrome with 100-450 ms render
-latency, input flows through kernel evdev nodes (not UI APIs), and every
-state change must be proven by screenshot because nothing renders
-instantly. This skill grounds each of those planes (access, display,
-input, files, screen map, tooling, loop discipline) in verified
-on-device paths so agents act deterministically instead of guessing.
+Nothing on the tablet helps an agent. No screenshot API that survives, no
+UI automation layer, no screen recording. What is actually there:
+
+- **Display**: 1404x1872 monochrome e-ink with 100-450 ms render latency.
+State can only be proven by capture, never assumed. The only stock way out
+(ScreenShare) needs a manual tap and dies on restart.
+- **Input**: kernel evdev nodes, not UI APIs. Coordinates, settle times,
+and key codes all by hand.
+- **Platform**: one Qt 6 app (xochitl) owns the composed screen. It
+restarts without warning, and every firmware moves its internals, so all
+addresses are pinned per build and re-verified on every run.
+
+This skill grounds each of those planes (access, display, input, files,
+screen map, tooling, loop discipline) in on-device paths that were verified
+live, so agents act deterministically instead of guessing.
 
 Target is the **reMarkable 2**. Paper Pro differences (Developer Mode,
 display stack, CPU arch) are flagged where they matter and never mixed
