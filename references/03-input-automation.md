@@ -166,7 +166,10 @@ py = raw_y * 1872 // y_max   # maxima from EVIOCGABS / evtest caps
    into the helper; never skip it.
  - 0.5 s linger after lift before `UI_DEV_DESTROY` (also in the helper),
    plus ~1 s host-side sleep for e-ink before the verify screenshot.
-
+ - Page turning: prefer the "Go to page" navigator thumbnails (05 §2.3)
+   over swipes — synthetic swipes are verified NO-OP in doc view (×4
+   isolated byte-exact tests). And never trust "ok": one tap in ~40 was
+   silently swallowed by Qt with no effect — verify every act.
  Bounds (enforced inside the helper — out-of-range input errors out,
  nonzero exit): tap X in [0, 1404), Y in [0, 1872); swipe adds STEPS
  in [1, 200], STEP_MS in [0, 5000]. Fixed tracking IDs (42 tap /

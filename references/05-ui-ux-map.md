@@ -6,16 +6,33 @@ uncertain items are marked `[INFERENCE]` or `[MED]` (medium confidence —
 confirm on-device before pixel-driving).
 
 Paper Pro deltas are flagged inline and **never mixed** into rM2 procedures.
- > Evidence status 2026-09-17: taps + swipes WORKING via `/tmp/rm-input`
- > over SSH (static helper, screen coords, Y flip internal), every act
- > screenshot-verified. VERIFIED: home map §2.1; tile tap opens notebook at
- > last-viewed page; X top-right (~1345,50) closes doc; home grid scrolls
- > vertically and restores byte-exact; doc toolbar is 13 icons (§4.1);
- > last-page right-to-left swipe opens a blank page + black add-page
- > button (~1225,990), empty page dropped on close.
- > NOT verified: hamburger menu contents, bottom-pill actions, add-page
- > button tap, edge-origin swipes, swipe-down-from-top (still DISPUTED,
- > do not script).
+ > Evidence 2026-09-17/18: taps + swipes WORKING via `/tmp/rm-input`
+ > over SSH (static helper, screen coords, Y flip internal), ~40 acts
+ > every one screenshot-verified.
+ > VERIFIED: home map; tile tap opens doc at last-viewed page; X
+ > top-right (~1345,50) closes doc AND PDF views; home grid scrolls,
+ > restores byte-exact; 13-icon toolbar with tap positions (§4.1);
+ > hamburger drawer contents; sort options + active-row direction
+ > toggle + outside-tap dismiss; search overlay + keyboard + Back;
+ > + button → Create dialog (Notebook/Folder/Quick sheet); calendar
+ > pill → offline toast; tag sheet (existing tag + New tag); ⋮ menu
+ > (Email/Convert and Share/Present with Screen Share); page
+ > navigator (Go to page, thumbs, current mark, Medium-grid toggle) +
+ > thumbnail jump = deterministic page turn; Trash browser; Settings
+ > tree + General/Display/Accessibility contents; tile labels track
+ > last-viewed page; overlay round-trips reset grid scroll to top.
+ > CORRECTION 2026-09-18: the "swipe creates page" claim is WITHDRAWN
+ > (batched test, uncertain tile). Isolated tests: synthetic swipes are
+ > NO-OP in doc view — notebook mid-page, notebook fast flick, PDF
+ > mid-page, PDF edge (all byte-exact no-change). The black add-page
+ > button exists (photographed twice) but its trigger is UNCONFIRMED.
+ > NOT verified: add-page button tap, tool-switch taps, undo/redo,
+ > layers panel, template-grid icon (no-op in PDF), Guides/Help/Wi-Fi/
+ > Cloud/Security subs, per-file Trash delete/restore, auto-sleep
+ > setting location, keyboard typing (photographed, never typed),
+ > swipe-down-from-top (still DISPUTED, do not script).
+ > RELIABILITY: one tap in ~40 was silently swallowed by Qt (ok-printed
+ > but no effect). NEVER trust "ok" — verify every act by screenshot.
 
 ## 1. Canvas and hardware frame
 
@@ -38,9 +55,9 @@ Paper Pro deltas are flagged inline and **never mixed** into rM2 procedures.
  │   └── Folder / Document (recursive)
  ├── Notebook-or-PDF Document view
  │   ├── Canvas (template-or-PDF base + ink layers)
- │   ├── Left toolbar (13 icons: 9 writing tools + eraser, select, layers, undo, redo, template, tag, share, more — see §4.1)
- │   ├── Top-right X (tap ~1345,50 closes to home — verified)
- │   └── Bottom page navigator (+ add page)
+ │   ├── Left toolbar (13 icons: writing tools + eraser, select, layers, undo, redo, template grid, pages, tag, ⋮ more — see §4.1)
+ │   ├── Top-right X (tap ~1345,50 closes to home — verified, doc + PDF views)
+ │   └── Page navigator ("Go to page" thumbs — deterministic page turn)
 └── Quick sheets (auto notebook pinned in My-files root)
 Overlays (from any screen): Share/export · Document settings ·
     Page settings · Settings tree · Help · Search · Power menu
@@ -58,68 +75,96 @@ Overlays (from any screen): Share/export · Document settings ·
 - Document grid with page thumbnails: PDFs render first-page content,
   notebooks render ink. Label is name plus "Page X of N", or "N% read" for
   ebooks in progress.
- - Bottom-center floating pill with three icons (magnifier, +, notebook).
-  Tapping its icons is NOT verified — actions unconfirmed.
- - Tile tap OPENS the document at its last-viewed page (verified: Planner
-  tile → page 6 of 6). Grid order follows the sort control ("File size")
-  and scroll offset — NEVER hardcode tile coords; locate the tile in a
-  fresh screenshot first, then tap its center.
+ - Bottom-center floating pill, three icons with verified positions
+  (orig coords at default scroll): search ~(580,1684), + ~(696,1683),
+  calendar ~(813,1683). Search → full-screen search overlay (field,
+  All/Relevance filters, on-screen keyboard, Back returns home).
+  + → "Create new" dialog (Notebook / Folder / Quick sheet; + turns
+  to ✕ while open, nothing created until chosen). Calendar → "No
+  active internet connection" toast (needs cloud; tablet offline).
+ - Tile tap OPENS the document at its last-viewed page. Tile labels
+  track last-viewed page (2408.15232 went 1/39 → 5/39 after a page
+  jump). Grid order follows the sort control; home has MULTIPLE scroll
+  positions (folders-top, docs-grid) and overlay round-trips reset
+  scroll to top — NEVER hardcode tile coords or assume scroll; locate
+  the tile in a fresh screenshot, convert with ×1.19, tap its center.
  - NOT present on this firmware: left sidebar filters, top-row search/new
   buttons, bottom status strip. Earlier claims of those removed.
-  Hamburger contents unconfirmed (menu itself never captured open).
 
-### 2.2 Top bar, hamburger, search — [STALE: contradicts verified §2.1]
+ ### 2.2 Hamburger drawer + sort — verified 2026-09-18
 
-The table below describes chrome that is NOT on screen in the 2026-09-17
-capture (no top-bar search/new/sort, no sidebar, no bottom strip). Kept for
-reference until re-verified; do not drive pixel paths from it.
+ Drawer (tap ~60,50) contents top→bottom: My files (header, selected),
+ Filter by (>), Favorites (star), Tags, Import files / Currently
+ offline (cloud), Trash, Guides, Settings (gear). Tap row to enter;
+ My-files header or hamburger returns.
 
-| Element | Location | Opens |
-|---|---|---|
-| Hamburger (≡) | Top-left | [INFERENCE] Main menu contents unconfirmed |
-| Search (magnifier) | Bottom-center pill, left icon [INFERENCE] | Search overlay incl. handwriting search (needs Connect account) |
-| New (+) | Bottom-center pill, middle icon [INFERENCE] | Create notebook / folder / Quick-sheet page |
-| Sort | Under "My files" title, right ("File size" + chevron) | Name / modified / type ordering [INFERENCE: options unconfirmed] |
-| WiFi / battery | Top-right status icons | Status only (no action) |
+ Sort control ("File size" + chevron, ~(1330,180)): options Last
+ modified, Last opened, Date created, Alphabetical (A-Z),
+ File size (selected), Page count; View: four density icons (Medium
+ grid selected). Tapping the ACTIVE row toggles sort DIRECTION for all
+ criteria (A-Z ↔ Z-A icon flip — a real state change; re-tap to
+ restore). Dismiss with no change by tapping outside (e.g. title).
 
- ### 2.3 Document view — verified from live screenshots 2026-09-17
+ | Element | Location | Opens |
+ |---|---|---|
+ | Hamburger (≡) | Top-left | Drawer above [VERIFIED] |
+ | Search (magnifier) | Bottom-center pill, left icon | Search overlay + keyboard [VERIFIED] |
+ | New (+) | Bottom-center pill, middle icon | Create dialog: Notebook / Folder / Quick sheet [VERIFIED] |
+ | Calendar | Bottom-center pill, right icon | Offline toast (cloud-gated) [VERIFIED] |
+ | Sort | Under "My files" title, right | Options + direction toggle above [VERIFIED] |
+ | WiFi / battery | Top-right status icons | Status only (no action) |
 
- - **Close:** X top-right (~1345,50) returns to home (verified 3x).
+ ### 2.3 Document view — verified from live screenshots 2026-09-18
+
+ - **Close:** X top-right (~1345,50) returns to home — doc AND PDF
+  views (verified 6x). In page-navigator mode X is replaced by Back
+  (top-left).
  - **Left toolbar:** 13-icon vertical strip, top→bottom: pen-dot (tool
   indicator), writing tool (A-nib icon, selected-underline), highlighter,
   T text, eraser, selection marquee, layers, undo, redo, template grid,
-  tag, share/export, ⋮ more. Active tool shows a dot; selected tool gets
-  a black tile.
- - **Top doc menu:** no title bar on the canvas — close is X only.
- - **Bottom page navigator / page turn:** swiping right-to-left mid-page
-  on the LAST notebook page opens a new blank page AND reveals a black
-  circular add-page button (white page-plus icon) at mid-right (~1225,990).
-  Tapping it adds the page explicitly; swiping again also creates it.
-  Closing with the page still empty drops it (home tile still read
-  "Page 6 of 6"). [VERIFIED 2026-09-17.] Edge-origin swipes untested.
+  pages, tag, ⋮ more. Active tool shows a dot; selected tool gets
+  a black tile. Verified tap positions (orig): pages ≈(48,1505),
+  tag ≈(48,1618), ⋮ ≈(48,1749). Template-grid icon is a NO-OP in PDF
+  view (likely notebook-only).
+ - **Top bar (doc view):** Back (in navigator mode), title center, and
+  in navigator mode: pages-list icon, tag icon, share (paper-plane)
+  icon right. No title bar on the canvas itself.
+ - **Page navigator (PREFERRED page turn):** pages toolbar icon opens
+  "Go to page" — thumbnail grid with page numbers, current page
+  marked, Medium-grid density toggle top-right. Tapping a thumbnail
+  jumps deterministically (verified p9 → p5). USE THIS, not swipes.
+ - **Swipe page turn: NO-OP for synthetic swipes** (all byte-exact
+  no-change): notebook mid-page, notebook fast flick (12×8ms), PDF
+  mid-page, PDF from right edge. Human-finger trigger unknown.
+ - **Add-page button:** black circle, white page-plus icon, mid-right
+  (~1225,990). Photographed twice on blank last pages. Trigger +
+  tap both UNCONFIRMED — do not script page creation.
 
 ## 3. Overlays
 
-| Overlay | Entry | Contents |
-|---|---|---|
-| Share / export | Top doc menu → Share | Export PDF/PNG, send via email/Drive/Connect (needs network + account) |
-| Document settings | Top doc menu | Shapes-assist toggle, orientation, language for handwriting conversion |
-| Page settings | Bottom navigator / doc menu | Per-page template pick, add/duplicate/reorder/delete page |
-| Settings | Hamburger → Settings | Tree, see §9 (partial — gaps flagged) |
-| Help | Hamburger → Help | Guides, Copyrights and licenses (SSH password + IPs under GPLv3 header) |
-| Search | Top-bar magnifier | File-name search; handwriting-content search with Connect |
-| Power menu | Long-press power button | Sleep, power off, restart, (cancel) |
+ | Overlay | Entry | Contents |
+ |---|---|---|
+ | Share / export | Doc top bar paper-plane; ⋮ menu | ⋮ menu shows Email / Convert and Share / Present with Screen Share [VERIFIED] |
+ | Tag sheet | Toolbar tag icon ≈(48,1618) | Existing tags listed (e.g. "thesis") + "+ New tag" [VERIFIED] |
+ | Page navigator | Toolbar pages icon ≈(48,1505) | "Go to page" thumbs, current mark, density toggle; thumbnail tap jumps [VERIFIED] |
+ | Document settings | Top doc menu | Shapes-assist toggle, orientation, language for handwriting conversion [INFERENCE] |
+ | Settings | Hamburger → Settings | Tree, see §10 (verified top level + 3 subs) |
+ | Trash | Hamburger → Trash | Full file browser (folders + docs + labels); per-file delete/restore untested [VERIFIED] |
+ | Search | Pill magnifier ≈(580,1684) | Field + All/Relevance filters + keyboard; Back returns home [VERIFIED] |
+ | Create | Pill + ≈(696,1683) | Notebook / Folder / Quick sheet dialog; + becomes ✕ [VERIFIED] |
+ | Power menu | Long-press power button | Sleep, power off, restart, (cancel) [INFERENCE] |
  ## 4. Toolbar — 13-icon strip (9 writing tools + page tools)
 
  ### 4.1 Strip layout (verified order, top→bottom, 2026-09-17)
 
  1. pen-dot (active-tool indicator) · 2. writing tool (A-nib) ·
  3. highlighter · 4. T text · 5. eraser · 6. selection marquee ·
- 7. layers · 8. undo · 9. redo · 10. template grid · 11. tag ·
- 12. share/export · 13. ⋮ more. Writing-tool icons 2–4 switch with the
- selected tool (only one visible at a time); the picker names below are
- the 9 official tools.
-
+ 7. layers · 8. undo · 9. redo · 10. template grid · 11. pages ·
+ 12. tag · 13. ⋮ more. (Earlier notes said 11=tag, 12=share — wrong:
+ effect-verified 2026-09-18: ≈(48,1505) opens pages, ≈(48,1618) opens
+ tag sheet.) Writing-tool icons 2–4 switch with the selected tool
+ (only one visible at a time); the picker names below are the 9
+ official tools.
  ### 4.2 The 9 writing tools
 
  Official set is 9 tools. Six names are report-confirmed; the remaining
@@ -153,11 +198,25 @@ Shared rules:
 
 ## 5. Gesture table
 
- | Tap document tile | My files grid | Opens doc at last-viewed page [VERIFIED 2026-09-17] |
- | Tap X top-right (~1345,50) | Document view | Closes to home [VERIFIED 2026-09-17] |
- | Vertical swipe | My files grid | Scrolls; reverse swipe restores byte-exact [VERIFIED 2026-09-17] |
- | Swipe right-to-left (mid-page) | Notebook last page | New blank page + black add-page button (~1225,990); empty page dropped on close [VERIFIED 2026-09-17] |
- | Tap add-page button | New blank page | Adds the page explicitly [per owner; tap untested] |
+ | Gesture | Context | Effect |
+ |---|---|---|
+ | Tap document tile | My files grid | Opens doc at last-viewed page [VERIFIED] |
+ | Tap X top-right (~1345,50) | Doc / PDF view | Closes to home [VERIFIED 6x] |
+ | Back top-left | Navigator / search / settings | Returns to previous screen [VERIFIED] |
+ | Vertical swipe | My files grid | Scrolls; reverse swipe restores byte-exact [VERIFIED] |
+ | Hamburger (~60,50) | Home | Drawer: My files/Filter/Favorites/Tags/Import/Trash/Guides/Settings [VERIFIED] |
+ | Sort chevron (~1330,180) | Home | Options + View density; tapping ACTIVE row toggles direction (state change!) [VERIFIED] |
+ | Tap outside | Open dropdown/dialog | Dismisses with no change [VERIFIED] |
+ | Pill search ~(580,1684) | Home | Search overlay + keyboard [VERIFIED] |
+ | Pill + ~(696,1683) | Home | Create dialog: Notebook/Folder/Quick sheet [VERIFIED] |
+ | Pill calendar ~(813,1683) | Home | Offline toast (cloud-gated) [VERIFIED] |
+ | Toolbar pages ≈(48,1505) | Doc view | "Go to page" navigator [VERIFIED] |
+ | Navigator thumbnail | Navigator | Jumps to that page (verified p9→p5) [VERIFIED] |
+ | Toolbar tag ≈(48,1618) | Doc view | Tag sheet: existing tags + New tag [VERIFIED] |
+ | Toolbar ⋮ ≈(48,1749) | Doc view | Menu: Email / Convert and Share / Present with Screen Share [VERIFIED] |
+ | Toolbar template-grid | PDF view | NO-OP (likely notebook-only) [VERIFIED] |
+ | Synthetic swipe (any: mid/fast/edge) | Doc / PDF last page | NO-OP, byte-exact (×4 isolated tests) [VERIFIED] |
+ | Add-page button (~1225,990) | Blank last page | Photographed ×2; trigger + tap UNCONFIRMED — do not script |
  | Swipe down from top edge | Document view | [DISPUTED by owner — do not script] Alleged: closes document / reveals menu. Contradictory as written; needs screenshot proof. |
 | Tap corner | Document view | Toggles bookmark on current page |
 | Long-press corner | Document view | Edits bookmark description |
@@ -218,31 +277,38 @@ them). Long-press suspend behavior is systemd/logind policy on top of
 
 - 3000 mAh, ~2-week typical use, **no backlight** — fully dark ⇒ off,
   not "dim".
-- States: **awake → light-sleep banner → deep-sleep (`suspended.png`)
-  → off**. Auto-sleep timeout is set in Settings `[MED exact values —
-  capture on-device]`.
+ - States: **awake → light-sleep banner → deep-sleep (`suspended.png`)
+  → off**. Auto-sleep timeout is NOT in Settings → Display (only a
+  "Visible content" standby toggle there) — location still unknown.
 - Sleep PNG: exactly 1404 × 1872 8-bit gray; static screens are
   **reset on OS upgrade**.
 - Wake: press power, open folio, or (over USB) any SSH activity does
   NOT wake the panel — verify wake by fresh screenshot.
 
-## 10. Settings tree (PARTIAL — gaps flagged)
+ ## 10. Settings tree — verified top level + 3 subs (fw 3.28, 2026-09-18)
 
-```
-Settings
-├── General — UI language (EN/DE/FR/ES), left-hand mode,
-│              auto-sleep timeout [MED values], Account setup
-├── WiFi — network list, connect, status
-├── Storage — usage, USB web interface toggle, about
-├── Update — check / install OS update
-├── Security — device lock passcode/PIN
-└── Help — guides, About [3.9–3.18 only],
-           Copyrights and licenses → GPLv3 block
-               (SSH root password + IP addresses)
-[INFERENCE — full subtree below each node unverified:
- support site is JS-gated and the device manual 403'd at fetch time.
- Capture the complete tree on-device before baking pixel paths.]
-```
+ ```
+ Settings (drawer → Settings)
+ ├── General — Account row (signed-in user), Software Version
+ │              (e.g. 3.28.0.172), Language and keyboard, Battery %,
+ │              Storage (used/total), Flight-mode toggle, Restart button,
+ │              Turn off button
+ ├── Wi-Fi — [NOT OPENED]
+ ├── Cloud — [NOT OPENED]
+ ├── Security — [NOT OPENED]
+ ├── Display — single toggle: "Visible content — Show your open
+ │              document or overview when in standby" (off). NO sleep
+ │              timeout here.
+ ├── Accessibility — Toolbar position Portrait Left / Landscape Left
+ │              (drag the hide/show button to move it); Handedness
+ │              Right/Left; Readability Standard/Large. (Nothing changed;
+ │              read-only visit.)
+ └── Help — [NOT OPENED]
+ ```
+
+ Harness notes: Back (top-left) walks one level up. Toolbar position is
+ a setting — never assume left-edge toolbar in pixel paths; confirm
+ from a screenshot (this tablet: left).
 
 ## 11. Empty, offline, error states
 
