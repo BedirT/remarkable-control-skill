@@ -3,8 +3,10 @@
 
 Parses <path>/<polyline>/<polygon> from an SVG file, fits the drawing
 into a canvas rectangle, and emits one FIFO `S` stroke line per
-subpath (pen-down stroke). Curves (C/S/Q/T/A) are flattened to
-polylines; every M starts a new stroke (pen lift between subpaths).
+subpath (pen-down stroke). Curves (C/S/Q/T) are flattened to
+polylines; implicit repeated coords are consumed; every M starts a
+new stroke (pen lift between subpaths). A (arc) is skipped with a
+stderr warning.
 
 Usage:
     python3 scripts/rm-svg.py drawing.svg [--box X Y W H] [--press A[:B]]
@@ -58,7 +60,7 @@ def cubic(p0, p1, p2, p3, tol=0.75):
 
 def parse_path(d):
     """Split path data into subpaths of absolute (x, y) points."""
-    toks = re.findall(r"[MmLlHhVvCcSsQqTtAaZz]|-?\d*\.?\d+(?:e-?\d+)?", d)
+    toks = re.findall(r"[MmLlHhVvCcSsQqTtAaZz]|[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?", d)
     subs, cur, start, i = [], [], None, 0
     x = y = 0.0
 
@@ -67,58 +69,55 @@ def parse_path(d):
         x, y = px, py
         cur.append((x, y))
 
+    CMD = "MmLlHhVvCcSsQqTtAaZz"
+    prev_c2 = None  # 2nd control point of previous C/S (abs) for S reflection
+    prev_q = None  # control point of previous Q/T (abs) for T reflection
     while i < len(toks):
         t = toks[i]
         i += 1
-        if t == "M":
+        if t in "Mm":
             if cur:
                 subs.append(cur)
                 cur = []
-            x, y = float(toks[i]), float(toks[i + 1])
+            dx, dy = float(toks[i]), float(toks[i + 1])
             i += 2
+            if t == "m":
+                dx, dy = x + dx, y + dy
+            x, y = dx, dy
             start = (x, y)
             cur.append(start)
-            while i + 1 < len(toks) and toks[i] not in "MmLlHhVvCcSsQqTtAaZz":
-                lineto(float(toks[i]), float(toks[i + 1]))
+            prev_c2 = prev_q = None
+            while i + 1 < len(toks) and toks[i] not in CMD:
+                dx, dy = float(toks[i]), float(toks[i + 1])
                 i += 2
-        elif t == "m":
-            if cur:
-                subs.append(cur)
-                cur = []
-            x, y = x + float(toks[i]), y + float(toks[i + 1])
-            i += 2
-            start = (x, y)
-            cur.append(start)
-            while i + 1 < len(toks) and toks[i] not in "MmLlHhVvCcSsQqTtAaZz":
-                lineto(x + float(toks[i]), y + float(toks[i + 1]))
+                if t == "m":
+                    dx, dy = x + dx, y + dy
+                lineto(dx, dy)
+        elif t in "Ll":
+            while i + 1 < len(toks) and toks[i] not in CMD:
+                dx, dy = float(toks[i]), float(toks[i + 1])
                 i += 2
-        elif t in "L":
-            lineto(float(toks[i]), float(toks[i + 1]))
-            i += 2
-        elif t == "l":
-            lineto(x + float(toks[i]), y + float(toks[i + 1]))
-            i += 2
-        elif t == "H":
-            lineto(float(toks[i]), y)
-            i += 1
-        elif t == "h":
-            lineto(x + float(toks[i]), y)
-            i += 1
-        elif t == "V":
-            lineto(x, float(toks[i]))
-            i += 1
-        elif t == "v":
-            lineto(x, y + float(toks[i]))
-            i += 1
-        elif t in "Cc":
-            rel = t == "C"
-            nums = []
-            while i < len(toks) and toks[i] not in "MmLlHhVvCcSsQqTtAaZz":
-                nums.append(float(toks[i]))
+                if t == "l":
+                    dx, dy = x + dx, y + dy
+                lineto(dx, dy)
+            prev_c2 = prev_q = None
+        elif t in "Hh":
+            while i < len(toks) and toks[i] not in CMD:
+                dx = float(toks[i])
                 i += 1
-            for k in range(0, len(nums) - 5, 6):
-                g = nums[k:k + 6]
-                if rel:
+                lineto(x + dx if t == "h" else dx, y)
+            prev_c2 = prev_q = None
+        elif t in "Vv":
+            while i < len(toks) and toks[i] not in CMD:
+                dy = float(toks[i])
+                i += 1
+                lineto(x, y + dy if t == "v" else dy)
+            prev_c2 = prev_q = None
+        elif t in "Cc":
+            while i + 5 < len(toks) and toks[i] not in CMD:
+                g = [float(toks[i + k]) for k in range(6)]
+                i += 6
+                if t == "c":
                     p1 = (x + g[0], y + g[1])
                     p2 = (x + g[2], y + g[3])
                     p3 = (x + g[4], y + g[5])
@@ -126,21 +125,54 @@ def parse_path(d):
                     p1, p2, p3 = (g[0], g[1]), (g[2], g[3]), (g[4], g[5])
                 for pt in cubic((x, y), p1, p2, p3):
                     lineto(*pt)
+                prev_c2, prev_q = p2, None
+        elif t in "Ss":
+            while i + 3 < len(toks) and toks[i] not in CMD:
+                g = [float(toks[i + k]) for k in range(4)]
+                i += 4
+                p1 = (2 * x - prev_c2[0], 2 * y - prev_c2[1]) if prev_c2 else (x, y)
+                if t == "s":
+                    p2 = (x + g[0], y + g[1])
+                    p3 = (x + g[2], y + g[3])
+                else:
+                    p2, p3 = (g[0], g[1]), (g[2], g[3])
+                for pt in cubic((x, y), p1, p2, p3):
+                    lineto(*pt)
+                prev_c2, prev_q = p2, None
         elif t in "Qq":
-            rel = t == "Q"
-            # Degree-elevate quadratic to cubic, then flatten.
-            nums = []
-            while i < len(toks) and toks[i] not in "MmLlHhVvCcSsQqTtAaZz":
-                nums.append(float(toks[i]))
-                i += 1
-            for k in range(0, len(nums) - 3, 4):
-                g = nums[k:k + 4]
-                q = (x + g[0], y + g[1]) if rel else (g[0], g[1])
-                r = (x + g[2], y + g[3]) if rel else (g[2], g[3])
+            while i + 3 < len(toks) and toks[i] not in CMD:
+                g = [float(toks[i + k]) for k in range(4)]
+                i += 4
+                if t == "q":
+                    q = (x + g[0], y + g[1])
+                    r = (x + g[2], y + g[3])
+                else:
+                    q, r = (g[0], g[1]), (g[2], g[3])
                 p1 = (x + 2 * (q[0] - x) / 3, y + 2 * (q[1] - y) / 3)
                 p2 = (r[0] + 2 * (q[0] - r[0]) / 3, r[1] + 2 * (q[1] - r[1]) / 3)
                 for pt in cubic((x, y), p1, p2, r):
                     lineto(*pt)
+                prev_q, prev_c2 = q, None
+        elif t in "Tt":
+            while i + 1 < len(toks) and toks[i] not in CMD:
+                dx, dy = float(toks[i]), float(toks[i + 1])
+                i += 2
+                r = (x + dx, y + dy) if t == "t" else (dx, dy)
+                q = (2 * x - prev_q[0], 2 * y - prev_q[1]) if prev_q else (x, y)
+                p1 = (x + 2 * (q[0] - x) / 3, y + 2 * (q[1] - y) / 3)
+                p2 = (r[0] + 2 * (q[0] - r[0]) / 3, r[1] + 2 * (q[1] - r[1]) / 3)
+                for pt in cubic((x, y), p1, p2, r):
+                    lineto(*pt)
+                prev_q, prev_c2 = q, None
+        elif t in "Aa":
+            n = 0
+            while i + 6 < len(toks) and toks[i] not in CMD:
+                i += 7
+                n += 1
+            if n:
+                print(f"warning: {n} arc segment(s) skipped (A unsupported)",
+                      file=sys.stderr)
+            prev_c2 = prev_q = None
         elif t in "Zz":
             if start is not None:
                 lineto(*start)
@@ -148,6 +180,7 @@ def parse_path(d):
                 subs.append(cur)
                 cur = []
                 start = None
+            prev_c2 = prev_q = None
     if cur:
         subs.append(cur)
     return [s for s in subs if len(s) > 1]
@@ -164,9 +197,11 @@ def stroke_cmds(sub, proj, press0, press1, flip_y=False):
         pts = [proj(x, y) for x, y in path]
         if flip_y:
             pts = [(x, SCREEN_H - 1 - y) for x, y in pts]
-        # Split very long subpaths so no call exceeds ~60 points.
-        for k in range(0, len(pts), 60):
-            chunk = pts[k:k + 61]
+        # Split very long subpaths so no FIFO line nears the 4KB read
+        # (200 pts ~= 2KB). Chunk joints share the endpoint; each is
+        # its own pen-down, so fewer chunks = fewer touchdown seams.
+        for k in range(0, len(pts), 200):
+            chunk = pts[k:k + 201]
             if len(chunk) < 2:
                 continue
             total = sum(
@@ -203,7 +238,7 @@ def main(argv):
         print("See script header for usage.")
         return 2
     path = argv[0]
-    box = [100, 200, SCREEN_W - 200, SCREEN_H - 400]
+    box = [150, 200, SCREEN_W - 300, SCREEN_H - 400]
     press0, press1, run, flip_y = 1500, 1500, False, False
     i = 1
     while i < len(argv):
