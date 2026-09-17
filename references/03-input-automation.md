@@ -156,7 +156,20 @@ py = raw_y * 1872 // y_max   # maxima from EVIOCGABS / evtest caps
  scripts/rm-ssh.sh -- /tmp/rm-input tap 513 1176; sleep 1
  scripts/rm-ssh.sh -- /tmp/rm-input swipe 700 1300 700 700 24 12; sleep 1
  scripts/rm-ssh.sh -- /tmp/rm-input --probe    # on-tablet caps dump
+ scripts/rm-ssh.sh -- /tmp/rm-input replay     # verbatim owner finger pair
  ```
+
+ Finger replay (page creation, VERIFIED 2/2 2026-09-18): the owner's
+ double-swipe was recorded passively (`cat /dev/input/event2`, 154
+ events, parsed host-side as 16-byte evdev structs) and baked into the
+ helper as `replay` — device coords, relative-ms timing, no arguments.
+ The real profile vs the old flat swipe: pressure RAMPS 69→114→90
+ (not const 60); TOUCH_MAJOR mostly absent, 8/17 when present (not
+ const 40); MINOR alternates 8/17; ORIENTATION 1-4 present (helper now
+ advertises axis 0x34); NO tool-type, NO slot, NO BTN_TOUCH events;
+ eased path ~440 px in 160-250 ms with a 2.5 s pair gap. Run it on a
+ last-page canvas, then judge by NAVIGATOR page count (+1 per pair) —
+ creation does not navigate, so canvas screenshots hide it.
 
  Two timing lessons, both learned the hard way live:
 
@@ -167,13 +180,14 @@ py = raw_y * 1872 // y_max   # maxima from EVIOCGABS / evtest caps
  - 0.5 s linger after lift before `UI_DEV_DESTROY` (also in the helper),
    plus ~1 s host-side sleep for e-ink before the verify screenshot.
  - Page turning: prefer the "Go to page" navigator thumbnails (05 §2.3)
-   over swipes — synthetic swipes are verified NO-OP in doc view (×4
-   isolated byte-exact tests). And never trust "ok": one tap in ~40 was
-   silently swallowed by Qt with no effect — verify every act.
+ over swipes — flat-profile synthetic swipes scroll the home grid but
+ are NO-OP in doc view (×6). Page CREATION works via `replay` (see
+ §5). And never trust "ok": one tap in ~50 was silently swallowed by
+ Qt with no effect — verify every act.
  Bounds (enforced inside the helper — out-of-range input errors out,
  nonzero exit): tap X in [0, 1404), Y in [0, 1872); swipe adds STEPS
  in [1, 200], STEP_MS in [0, 5000]. Fixed tracking IDs (42 tap /
- 43 swipe) — no concurrent runs.
+ 43 swipe, 601/602 replay) — no concurrent runs.
 
  Rebuild the helper (prebuilt binary ships at `scripts/rm-input/rm-input`):
 

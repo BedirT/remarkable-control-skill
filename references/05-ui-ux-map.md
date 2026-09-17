@@ -20,15 +20,16 @@ Paper Pro deltas are flagged inline and **never mixed** into rM2 procedures.
  > deterministic page turn; Trash browser; Settings tree +
  > General/Display/Accessibility contents; tile labels track
  > last-viewed page; overlay round-trips reset grid scroll to top.
- > PAGE-CREATE STATUS: owner flow is double-swipe on last page (button
- > appears, second swipe creates; works notebook AND PDF). 6 synthetic
- > variants all byte-exact NO-OP on CONFIRMED last pages
- > (navigator-verified Notebook 19 p2/2, readalong33 p5/5): notebook
- > mid-page, notebook fast flick, PDF mid-page, PDF edge, notebook
- > double, PDF double. Likely cause: contact fidelity (constant
- > pressure/size/timing vs ramping finger). The button ALSO sits
- > permanently in the page navigator. Trigger + tap UNCONFIRMED —
- > do not script page creation.
+ > PAGE-CREATE: REPLICATED 2/2 via verbatim finger replay (`replay`
+ > mode in rm-input: 154 recorded events, pressure 69→114→90 ramp,
+ > sparse MAJOR 8/17, MINOR 8/17, ORIENTATION 1-4, eased velocity,
+ > pair gap 2.5 s; each pair run +1 page). Owner finger pair 3→4,
+ > replay 4→5 and 5→6. Old flat-profile swipes (pressure 60 const,
+ > size 40 const, linear, no ORIENTATION) scroll the home grid but
+ > never create in doc view — profile is the discriminator, not the
+ > device (replay runs over uinput). Judge creation by NAVIGATOR
+ > page count, never canvas bytes: creation does not navigate, and
+ > blank-to-blank compares hide it; home tiles can also render stale.
  > NOT verified: add-page button tap, tool-switch taps, undo/redo,
  > layers panel, template-grid icon (no-op in PDF), Guides/Help/Wi-Fi/
  > Cloud/Security subs, per-file Trash delete/restore, auto-sleep
@@ -136,17 +137,19 @@ Overlays (from any screen): Share/export · Document settings ·
   "Go to page" — thumbnail grid with page numbers, current page
   marked, Medium-grid density toggle top-right. Tapping a thumbnail
   jumps deterministically (verified p9 → p5). USE THIS, not swipes.
- - **Swipe page turn: NO-OP for synthetic swipes** (all byte-exact
-  no-change on CONFIRMED last pages): notebook mid-page, notebook fast
-  flick (12×8ms), PDF mid-page, PDF from right edge, notebook
-  double-swipe, PDF double-swipe. Suspected cause: contact fidelity
-  (constant pressure/size vs ramping finger).
- - **Add-page button:** black circle, white page-plus icon, mid-right
-  (~1225,990) on blank last pages; ALSO permanently in the page
-  navigator corner. Photographed ×3. Owner flow (double-swipe reveals,
-  second swipe creates, notebook + PDF) works by finger but all 6
-  synthetic variants no-op — trigger + tap UNCONFIRMED, do not script
-  page creation.
+ - **Swipe page turn: flat-profile synthetic swipes are NO-OP in doc
+  view** (pressure 60 + size 40 const, linear, no ORIENTATION): 6
+  variants byte-exact no-change on confirmed last pages — yet they
+  scroll the home grid fine. The discriminator is the event profile,
+  not the device.
+ - **Page creation REPLICATED 2/2** with `replay` (verbatim owner
+  finger pair: pressure ramps 69→114→90, sparse MAJOR 8/17, MINOR
+  8/17, ORIENTATION 1-4, eased path ~440 px in 160-250 ms, 2.5 s pair
+  gap). Judge by NAVIGATOR count — creation does not navigate, so
+  canvas compares hide it. Which single feature matters is UNPROVEN
+  (ablation follow-up); use replay as-is. The canvas add-page button
+  and navigator-corner button both exist (photographed); direct taps
+  on them remain UNTESTED now that a working path exists.
 
 ## 3. Overlays
 
@@ -218,8 +221,8 @@ Shared rules:
  | Pill search ~(580,1684) | Home | Search overlay + keyboard [VERIFIED] |
  | Pill + ~(696,1683) | Home | Create dialog: Notebook/Folder/Quick sheet [VERIFIED] |
  | Pill calendar ~(813,1683) | Home | Offline toast (cloud-gated) [VERIFIED] |
- | Toolbar pages ≈(48,1505) | Doc view | "Go to page" navigator [VERIFIED] |
- | Navigator thumbnail | Navigator | Jumps to that page (verified p9→p5) [VERIFIED] |
+ | Synthetic swipe, flat profile (pressure 60/size 40 const) | Confirmed last pages | Scrolls home grid, but NO-OP in doc view (×6) [VERIFIED] |
+ | Finger double-swipe replay (154 ev, pressure ramp, orient) | Notebook last page | +1 page per pair run, 2/2 [VERIFIED] |
  | Toolbar tag ≈(48,1618) | Doc view | Tag sheet: existing tags + New tag [VERIFIED] |
  | Toolbar ⋮ ≈(48,1749) | Doc view | Menu: Email / Convert and Share / Present with Screen Share [VERIFIED] |
  | Toolbar template-grid | PDF view | NO-OP (likely notebook-only) [VERIFIED] |

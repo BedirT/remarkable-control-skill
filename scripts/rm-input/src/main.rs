@@ -24,6 +24,7 @@ const ABS_MT_PRESSURE: u16 = 0x3a;
 const ABS_MT_TOUCH_MAJOR: u16 = 0x30;
 const ABS_MT_TOUCH_MINOR: u16 = 0x31;
 const ABS_MT_TOOL_TYPE: u16 = 0x37;
+const ABS_MT_ORIENTATION: u16 = 0x34;
 const MT_TOOL_FINGER: i32 = 0;
 const TOUCH_SIZE: i32 = 40;
 const PROP_DIRECT: u32 = 1;
@@ -45,6 +46,165 @@ const TAP_TID: i32 = 42;
 const SWIPE_TID: i32 = 43;
 const FALLBACK_X_MAX: i32 = 1403;
 const FALLBACK_Y_MAX: i32 = 1871;
+// Verbatim replay of the owner's finger double-swipe, device coords +
+// relative ms. Captured 2026-09-18 on pt_mt; the pair took Notebook 19
+// from 3 pages to 4. TRKIDs remapped to fresh values (601/602).
+const REPLAY: &[(u64, u16, u16, i32)] = &[
+    (0,3,57,601),
+    (0,3,53,893),
+    (0,3,54,519),
+    (0,3,58,98),
+    (0,0,0,0),
+    (9,3,53,886),
+    (0,3,54,520),
+    (0,3,58,96),
+    (0,0,0,0),
+    (9,3,53,872),
+    (0,3,54,523),
+    (0,3,58,95),
+    (0,3,49,8),
+    (0,3,52,1),
+    (0,0,0,0),
+    (10,3,53,854),
+    (0,3,54,526),
+    (0,3,58,93),
+    (0,3,49,17),
+    (0,3,52,2),
+    (0,0,0,0),
+    (12,3,53,829),
+    (0,3,54,530),
+    (0,3,58,101),
+    (0,0,0,0),
+    (12,3,53,789),
+    (0,3,54,535),
+    (0,3,58,108),
+    (0,3,48,17),
+    (0,3,52,4),
+    (0,0,0,0),
+    (12,3,53,733),
+    (0,3,54,541),
+    (0,3,58,114),
+    (0,0,0,0),
+    (12,3,53,675),
+    (0,3,54,545),
+    (0,3,58,112),
+    (0,3,49,8),
+    (0,3,52,2),
+    (0,0,0,0),
+    (12,3,53,608),
+    (0,3,54,547),
+    (0,3,58,109),
+    (0,3,49,17),
+    (0,3,52,4),
+    (0,0,0,0),
+    (12,3,53,548),
+    (0,3,54,548),
+    (0,3,58,105),
+    (0,0,0,0),
+    (12,3,53,491),
+    (0,3,58,95),
+    (0,3,52,3),
+    (0,0,0,0),
+    (12,3,53,440),
+    (0,3,54,545),
+    (0,3,58,94),
+    (0,3,48,8),
+    (0,3,52,2),
+    (0,0,0,0),
+    (35,3,57,-1),
+    (0,0,0,0),
+    (2529,3,57,602),
+    (0,3,53,981),
+    (0,3,54,310),
+    (0,3,58,69),
+    (0,3,49,8),
+    (0,3,52,1),
+    (0,0,0,0),
+    (17,3,53,979),
+    (0,3,58,92),
+    (0,3,49,17),
+    (0,3,52,2),
+    (0,0,0,0),
+    (10,3,53,975),
+    (0,0,0,0),
+    (12,3,53,969),
+    (0,3,54,312),
+    (0,3,58,94),
+    (0,0,0,0),
+    (12,3,53,961),
+    (0,3,54,314),
+    (0,3,58,97),
+    (0,0,0,0),
+    (12,3,53,950),
+    (0,3,54,317),
+    (0,0,0,0),
+    (12,3,53,936),
+    (0,3,54,319),
+    (0,3,58,100),
+    (0,0,0,0),
+    (12,3,53,920),
+    (0,3,54,323),
+    (0,3,58,103),
+    (0,0,0,0),
+    (12,3,53,901),
+    (0,3,54,326),
+    (0,3,58,105),
+    (0,3,48,17),
+    (0,3,52,3),
+    (0,0,0,0),
+    (12,3,53,879),
+    (0,3,54,330),
+    (0,3,58,104),
+    (0,0,0,0),
+    (12,3,53,854),
+    (0,3,54,333),
+    (0,3,58,106),
+    (0,3,49,8),
+    (0,3,52,2),
+    (0,0,0,0),
+    (12,3,53,825),
+    (0,3,54,337),
+    (0,3,58,113),
+    (0,3,49,17),
+    (0,3,52,3),
+    (0,0,0,0),
+    (12,3,53,791),
+    (0,3,54,340),
+    (0,3,58,111),
+    (0,3,52,4),
+    (0,0,0,0),
+    (12,3,53,751),
+    (0,3,54,343),
+    (0,3,58,114),
+    (0,0,0,0),
+    (12,3,53,710),
+    (0,3,54,345),
+    (0,3,58,112),
+    (0,3,49,8),
+    (0,3,52,2),
+    (0,0,0,0),
+    (12,3,53,671),
+    (0,3,54,347),
+    (0,3,58,111),
+    (0,0,0,0),
+    (12,3,53,630),
+    (0,3,54,349),
+    (0,3,58,108),
+    (0,3,49,17),
+    (0,3,52,4),
+    (0,0,0,0),
+    (12,3,53,590),
+    (0,3,54,350),
+    (0,3,58,103),
+    (0,0,0,0),
+    (12,3,53,551),
+    (0,3,54,351),
+    (0,3,58,90),
+    (0,3,52,3),
+    (0,0,0,0),
+    (36,3,57,-1),
+    (0,0,0,0),
+];
 
 #[repr(C)]
 struct UinputSetup {
@@ -225,7 +385,7 @@ fn create_device(x_max: i32, y_max: i32) -> RawFd {
     set_bit(fd, UI_SET_EVBIT, EV_KEY as u32, "UI_SET_EVBIT/KEY");
     set_bit(fd, UI_SET_EVBIT, EV_ABS as u32, "UI_SET_EVBIT/ABS");
     set_bit(fd, UI_SET_KEYBIT, BTN_TOUCH as u32, "UI_SET_KEYBIT/TOUCH");
-    for b in [ABS_MT_SLOT, ABS_MT_TRACKING_ID, ABS_MT_POSITION_X, ABS_MT_POSITION_Y, ABS_MT_PRESSURE, ABS_MT_TOUCH_MAJOR, ABS_MT_TOUCH_MINOR, ABS_MT_TOOL_TYPE] {
+    for b in [ABS_MT_SLOT, ABS_MT_TRACKING_ID, ABS_MT_POSITION_X, ABS_MT_POSITION_Y, ABS_MT_PRESSURE, ABS_MT_TOUCH_MAJOR, ABS_MT_TOUCH_MINOR, ABS_MT_TOOL_TYPE, ABS_MT_ORIENTATION] {
         set_bit(fd, UI_SET_ABSBIT, b as u32, "UI_SET_ABSBIT");
     }
     set_bit(fd, UI_SET_PROPBIT, PROP_DIRECT, "UI_SET_PROPBIT/DIRECT");
@@ -244,7 +404,7 @@ fn create_device(x_max: i32, y_max: i32) -> RawFd {
         info: AbsInfo,
     }
     const UI_ABS_SETUP: u64 = 0x401c5504;
-    for (code, min, max) in [(ABS_MT_SLOT, 0, 31), (ABS_MT_TRACKING_ID, 0, 65535), (ABS_MT_POSITION_X, 0, x_max), (ABS_MT_POSITION_Y, 0, y_max), (ABS_MT_PRESSURE, 0, 255), (ABS_MT_TOUCH_MAJOR, 0, 255), (ABS_MT_TOUCH_MINOR, 0, 255), (ABS_MT_TOOL_TYPE, 0, 1)] {
+    for (code, min, max) in [(ABS_MT_SLOT, 0, 31), (ABS_MT_TRACKING_ID, 0, 65535), (ABS_MT_POSITION_X, 0, x_max), (ABS_MT_POSITION_Y, 0, y_max), (ABS_MT_PRESSURE, 0, 255), (ABS_MT_TOUCH_MAJOR, 0, 255), (ABS_MT_TOUCH_MINOR, 0, 255), (ABS_MT_TOOL_TYPE, 0, 1), (ABS_MT_ORIENTATION, -127, 127)] {
         let mut s = AbsSetup {
             code,
             pad: 0,
@@ -356,7 +516,28 @@ fn main() {
         println!("ok swipe {} {} {} {} steps={}", x1, y1, x2, y2, steps);
         return;
     }
-    eprintln!("usage: rm-input --probe | tap X Y | swipe X1 Y1 X2 Y2 [STEPS=24] [STEP_MS=12]");
-    eprintln!("coords are SCREEN pixels (1404x1872 portrait); Y flip applied internally");
+    if args.len() >= 2 && args[1] == "replay" {
+        let (node, x, y) = find_pt_mt();
+        let _ = node;
+        let xmax = if x.maximum > 0 && x.maximum <= 4096 { x.maximum } else { FALLBACK_X_MAX };
+        let ymax = if y.maximum > 0 && y.maximum <= 4096 { y.maximum } else { FALLBACK_Y_MAX };
+        let _ = (xmax, ymax);
+        let fd = create_device(xmax, ymax);
+        for &(dt, ty, code, val) in REPLAY {
+            if dt > 0 {
+                msleep(dt);
+            }
+            if ty == EV_SYN {
+                sync(fd);
+            } else {
+                emit(fd, ty, code, val);
+            }
+        }
+        destroy(fd);
+        println!("ok replay {} events", REPLAY.len());
+        return;
+    }
+    eprintln!("usage: rm-input --probe | tap X Y | swipe X1 Y1 X2 Y2 [STEPS=24] [STEP_MS=12] | replay");
+    eprintln!("coords are SCREEN pixels (1404x1872 portrait); Y flip applied internally; replay is device coords");
     exit(2);
 }
