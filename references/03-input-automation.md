@@ -9,7 +9,8 @@ never reuse rM2 node names, paths, or coordinate maxima there.
  python-evdev / libevdev docs — plus LIVE EVIDENCE 2026-09-17: static ARM
  helper `scripts/rm-input/` driving taps and swipes on-device, every act
  screenshot-verified (tile open, X close, grid scroll + byte-exact
- restore). Tap + swipe: WORKING. Pen stroke / KEY_POWER: not implemented.
+ restore). Tap + swipe: WORKING. Pen stroke: WORKING (§5b–§5d, SVG via
+ scripts/rm-svg.py). KEY_POWER: not implemented.
 
  ## 1. Device mapping (rM2) — probed live 2026-09-17 (`rm-input --probe`)
 

@@ -87,6 +87,7 @@ first screen capture to prove the loop works.
    # Hash gate (wrong build = wrong addresses), object-type and shape checks (is it really the
    # screen image?), mapping check (/dev/fb0 looks valid but is stale), pre/post rechecks (the app
    # has restarted mid-run before: a torn frame is discarded, never saved), byte cap and deadline
+   # (a bug can never dump forever), safe saving (a failed run never overwrites the last good shot).
  3. Act exactly once: one file op (`references/04-files-content.md`),
    one tap/swipe via `/tmp/rm-input`, or one pen stroke / SVG drawing
    (`references/03-input-automation.md` §5, §5b–§5d):

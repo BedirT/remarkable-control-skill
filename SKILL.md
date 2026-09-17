@@ -30,6 +30,7 @@ Your key lives in `/home/root/.ssh/authorized_keys` on the tablet (on `/home`, s
 3. **Verify**: re-screenshot; e-ink needs 0.5–1.0 s settle after input. Never verify by forcing a refresh.
 
  Timeouts: 2 s fail-fast probe, 5 s bulk-transfer default — `scripts/rm-ssh.sh`
+ honors `RM_CONNECT_TIMEOUT` (integer 1..30, default 5), so the 2 s probe needs `RM_CONNECT_TIMEOUT=2` or raw ssh/config. Tool choice: [06](references/06-tooling-ecosystem.md); loop discipline: [07](references/07-autonomy-loop.md).
 
 ## Draw with the pen (working feature)
 
