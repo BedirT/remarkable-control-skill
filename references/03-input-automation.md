@@ -143,10 +143,12 @@ py = raw_y * 1872 // y_max   # maxima from EVIOCGABS / evtest caps
  `sendevent`. It creates a `/dev/uinput` virtual device cloning the real
  `pt_mt` caps (§2 block: all MT axes with probed ranges), emits full
  Type-B frames (SLOT + TRACKING_ID + POSITION_X/Y + PRESSURE 60 +
- TOUCH_MAJOR/MINOR 40 + TOOL_FINGER, EV_MSC timestamped), and destroys
- the node. Call it directly over the existing SSH session — no host
- wrapper, no Python involved. Args are SCREEN coords; the Y flip (§4)
- is applied inside the helper.
+ TOOL_FINGER; swipe contact is finger-sized — MINOR alternating 8/17,
+ MAJOR sparse every 3rd frame — because MAJOR/MINOR 40 is
+ palm-rejected in doc view, proven by ablation 2026-09-18; taps keep
+ 40, they work everywhere), and destroys the node. Call it directly
+ over the existing SSH session — no host wrapper, no Python involved.
+ Args are SCREEN coords; the Y flip (§4) is applied inside the helper.
 
  ```sh
  # First use: copy it over (nothing installed, lives in /tmp):

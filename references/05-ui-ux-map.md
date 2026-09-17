@@ -20,16 +20,17 @@ Paper Pro deltas are flagged inline and **never mixed** into rM2 procedures.
  > deterministic page turn; Trash browser; Settings tree +
  > General/Display/Accessibility contents; tile labels track
  > last-viewed page; overlay round-trips reset grid scroll to top.
- > PAGE-CREATE: REPLICATED 2/2 via verbatim finger replay (`replay`
- > mode in rm-input: 154 recorded events, pressure 69→114→90 ramp,
- > sparse MAJOR 8/17, MINOR 8/17, ORIENTATION 1-4, eased velocity,
- > pair gap 2.5 s; each pair run +1 page). Owner finger pair 3→4,
- > replay 4→5 and 5→6. Old flat-profile swipes (pressure 60 const,
- > size 40 const, linear, no ORIENTATION) scroll the home grid but
- > never create in doc view — profile is the discriminator, not the
- > device (replay runs over uinput). Judge creation by NAVIGATOR
+ > PAGE-CREATE: SOLVED by ablation 2026-09-18. The gate is TOUCH SIZE:
+ > MAJOR/MINOR 40 (helper's old const) is palm-rejected in doc view
+ > 0/2; finger sizes (sparse MAJOR, MINOR alternating 8/17) create.
+ > Proven IRRELEVANT: pressure ramp (flat 95 and flat 60 both work),
+ > ORIENTATION presence, TOOL_TYPE presence, eased-vs-linear path,
+ > screen zone. Default `swipe` now emits finger sizes (minor 8/17
+ > alternating, major every 3rd frame); the old mid-screen pair shape
+ > that failed 6× now creates (11→12). Size threshold between 17 and
+ > 40 still unmapped — stay at ≤17. Judge creation by NAVIGATOR
  > page count, never canvas bytes: creation does not navigate, and
- > blank-to-blank compares hide it; home tiles can also render stale.
+ > blank-to-blank compares hide it; home tiles can render stale.
  > NOT verified: add-page button tap, tool-switch taps, undo/redo,
  > layers panel, template-grid icon (no-op in PDF), Guides/Help/Wi-Fi/
  > Cloud/Security subs, per-file Trash delete/restore, auto-sleep
@@ -137,19 +138,16 @@ Overlays (from any screen): Share/export · Document settings ·
   "Go to page" — thumbnail grid with page numbers, current page
   marked, Medium-grid density toggle top-right. Tapping a thumbnail
   jumps deterministically (verified p9 → p5). USE THIS, not swipes.
- - **Swipe page turn: flat-profile synthetic swipes are NO-OP in doc
-  view** (pressure 60 + size 40 const, linear, no ORIENTATION): 6
-  variants byte-exact no-change on confirmed last pages — yet they
-  scroll the home grid fine. The discriminator is the event profile,
-  not the device.
- - **Page creation REPLICATED 2/2** with `replay` (verbatim owner
-  finger pair: pressure ramps 69→114→90, sparse MAJOR 8/17, MINOR
-  8/17, ORIENTATION 1-4, eased path ~440 px in 160-250 ms, 2.5 s pair
-  gap). Judge by NAVIGATOR count — creation does not navigate, so
-  canvas compares hide it. Which single feature matters is UNPROVEN
-  (ablation follow-up); use replay as-is. The canvas add-page button
-  and navigator-corner button both exist (photographed); direct taps
-  on them remain UNTESTED now that a working path exists.
+ - **Swipe page turn: works with finger-sized contact.** Ablation
+  (6 variants + rerun): only TOUCH MAJOR/MINOR matters — 40 const is
+  palm-rejected 0/2 in doc view; sparse 8/17 creates every time.
+  Pressure (ramp/flat 95/flat 60), ORIENTATION, TOOL_TYPE, eased vs
+  linear path, and screen zone are all irrelevant. Default `swipe`
+  now uses finger sizes — the skill's swipes are human by default.
+ - **Page creation: SOLVED.** Pair of swipes on a last-page canvas,
+  +1 page per pair (finger 3→4, replay 4→5 + 5→6, variants →7..11,
+  new default 11→12). Judge by NAVIGATOR count — creation does not
+  navigate, so canvas compares hide it.
 
 ## 3. Overlays
 
@@ -221,8 +219,8 @@ Shared rules:
  | Pill search ~(580,1684) | Home | Search overlay + keyboard [VERIFIED] |
  | Pill + ~(696,1683) | Home | Create dialog: Notebook/Folder/Quick sheet [VERIFIED] |
  | Pill calendar ~(813,1683) | Home | Offline toast (cloud-gated) [VERIFIED] |
- | Synthetic swipe, flat profile (pressure 60/size 40 const) | Confirmed last pages | Scrolls home grid, but NO-OP in doc view (×6) [VERIFIED] |
- | Finger double-swipe replay (154 ev, pressure ramp, orient) | Notebook last page | +1 page per pair run, 2/2 [VERIFIED] |
+ | Synthetic swipe, big touch (size 40) | Doc last page | Palm-rejected, NO-OP 0/2 [VERIFIED] |
+ | Synthetic swipe, finger sizes (minor 8/17) | Doc last page, any zone | Creates page per pair, incl. old failing shape [VERIFIED] |
  | Toolbar tag ≈(48,1618) | Doc view | Tag sheet: existing tags + New tag [VERIFIED] |
  | Toolbar ⋮ ≈(48,1749) | Doc view | Menu: Email / Convert and Share / Present with Screen Share [VERIFIED] |
  | Toolbar template-grid | PDF view | NO-OP (likely notebook-only) [VERIFIED] |

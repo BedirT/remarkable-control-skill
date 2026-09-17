@@ -502,8 +502,14 @@ fn main() {
             emit(fd, EV_ABS, ABS_MT_POSITION_X, x1 + (x2 - x1) * i / steps);
             emit(fd, EV_ABS, ABS_MT_POSITION_Y, y1 + (y2 - y1) * i / steps);
             emit(fd, EV_ABS, ABS_MT_PRESSURE, PRESSURE);
-            emit(fd, EV_ABS, ABS_MT_TOUCH_MAJOR, TOUCH_SIZE);
-            emit(fd, EV_ABS, ABS_MT_TOUCH_MINOR, TOUCH_SIZE);
+            // Finger-sized contact (ablation 2026-09-18: MAJOR/MINOR 40
+            // is palm-rejected in doc view 0/2; sparse 8/17 creates.
+            // Pressure/orientation/tool-type/path-shape all irrelevant.)
+            let sz = if (i / 3) % 2 == 0 { 8 } else { 17 };
+            if i % 3 == 0 {
+                emit(fd, EV_ABS, ABS_MT_TOUCH_MAJOR, sz);
+            }
+            emit(fd, EV_ABS, ABS_MT_TOUCH_MINOR, sz);
             emit(fd, EV_ABS, ABS_MT_TOOL_TYPE, MT_TOOL_FINGER);
             sync(fd);
             if i < steps {
@@ -522,8 +528,35 @@ fn main() {
         let xmax = if x.maximum > 0 && x.maximum <= 4096 { x.maximum } else { FALLBACK_X_MAX };
         let ymax = if y.maximum > 0 && y.maximum <= 4096 { y.maximum } else { FALLBACK_Y_MAX };
         let _ = (xmax, ymax);
+        // Optional variant file: lines of "dt_ms type code value".
+        // No arg = baked-in owner finger pair (device coords).
+        let table: Vec<(u64, u16, u16, i32)> = if args.len() >= 3 {
+            let txt = std::fs::read_to_string(&args[2]).unwrap_or_else(|_| die("cannot read replay file"));
+            let mut v = Vec::new();
+            for (li, ln) in txt.lines().enumerate() {
+                let ln = ln.trim();
+                if ln.is_empty() || ln.starts_with('#') {
+                    continue;
+                }
+                let p: Vec<&str> = ln.split_whitespace().collect();
+                if p.len() != 4 {
+                    die(&format!("replay line {}: want 4 ints", li + 1));
+                }
+                let dt: u64 = p[0].parse().unwrap_or_else(|_| die("bad dt"));
+                let ty: u16 = p[1].parse().unwrap_or_else(|_| die("bad type"));
+                let code: u16 = p[2].parse().unwrap_or_else(|_| die("bad code"));
+                let val: i32 = p[3].parse().unwrap_or_else(|_| die("bad value"));
+                v.push((dt, ty, code, val));
+            }
+            if v.is_empty() {
+                die("replay file empty");
+            }
+            v
+        } else {
+            REPLAY.to_vec()
+        };
         let fd = create_device(xmax, ymax);
-        for &(dt, ty, code, val) in REPLAY {
+        for &(dt, ty, code, val) in &table {
             if dt > 0 {
                 msleep(dt);
             }
@@ -534,7 +567,7 @@ fn main() {
             }
         }
         destroy(fd);
-        println!("ok replay {} events", REPLAY.len());
+        println!("ok replay {} events", table.len());
         return;
     }
     eprintln!("usage: rm-input --probe | tap X Y | swipe X1 Y1 X2 Y2 [STEPS=24] [STEP_MS=12] | replay");
