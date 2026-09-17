@@ -37,8 +37,9 @@ UI automation layer, no screen recording. What is actually there:
 - **Display**: 1404x1872 monochrome e-ink with 100-450 ms render latency.
 State can only be proven by capture, never assumed. The only stock way out
 (ScreenShare) needs a manual tap and dies on restart.
-- **Input**: kernel evdev nodes, not UI APIs. Coordinates, settle times,
-and key codes all by hand.
+ - **Input**: kernel evdev nodes, not UI APIs. A tiny static helper
+   (`scripts/rm-input/`, copied to the tablet's `/tmp`) taps and swipes
+   with screen coordinates; pen and keys are not done yet.
 - **Platform**: one Qt 6 app (xochitl) owns the composed screen. It
 restarts without warning, and every firmware moves its internals, so all
 addresses are pinned per build and re-verified on every run.
@@ -86,10 +87,14 @@ first screen capture to prove the loop works.
    # has restarted mid-run before: a torn frame is discarded, never saved), byte cap and deadline
    # (a bug can never dump forever), safe saving (a failed run never overwrites the last good shot).
 
-3. Act exactly once: one file op (`references/04-files-content.md`)
-   or one uinput tap/swipe/stroke (`references/03-input-automation.md`):
-   sleep 0.5-1 s for e-ink settle, then re-capture to verify
-   (`references/07-autonomy-loop.md`).
+ 3. Act exactly once: one file op (`references/04-files-content.md`)
+   or one tap/swipe via `/tmp/rm-input` (`references/03-input-automation.md` §5):
+ ```sh
+ scp scripts/rm-input/rm-input root@10.11.99.1:/tmp/rm-input   # first use only
+ scripts/rm-ssh.sh -- /tmp/rm-input tap 700 936; sleep 1       # tap center
+ scripts/rm-capture.py --out verify.png                        # prove it
+ ```
+ See `references/07-autonomy-loop.md` for the full loop discipline.
 
 Start every task at [SKILL.md](SKILL.md): it routes to the right
 reference and states the safety rules.
@@ -101,12 +106,12 @@ SKILL.md                        thin router (<100 lines): connect, loop, safety
 references/
   01-access-auth.md             USB/WiFi SSH, keys, password paths, Web UI, pairing avoidance
   02-display-screenshot.md      panel specs, capture method (§2), failure fallback (§3), safety, Paper Pro deltas
-  03-input-automation.md        tap/swipe scripts shipped; pen stroke + KEY_POWER via the 03 section-5 pattern (no dedicated script)
-  04-files-content.md           xochitl tree, USB endpoints, rmapi, cloud / rmfakecloud
-  05-ui-ux-map.md               screen hierarchy, gestures, 9-tool toolbar, states, e-ink design rules
-  06-tooling-ecosystem.md       capture / input / file tool comparison with repo links + status
-  07-autonomy-loop.md           zero-interruption observe-act-verify discipline, timeouts, recovery
-scripts/                        rm-capture.py (screen capture), rm-ssh.sh (SSH wrapper), rm-tap.py / rm-swipe.py (input)
+   03-input-automation.md        tap/swipe via /tmp/rm-input helper (§5); pen + keys not implemented
+   04-files-content.md           xochitl tree, USB endpoints, rmapi, cloud / rmfakecloud
+   05-ui-ux-map.md               screen hierarchy, gestures, 13-icon toolbar, states, e-ink design rules
+   06-tooling-ecosystem.md       capture / input / file tool comparison with repo links + status
+   07-autonomy-loop.md           zero-interruption observe-act-verify discipline, timeouts, recovery
+ scripts/                        rm-capture.py (screen capture), rm-ssh.sh (SSH wrapper), rm-input/ (Rust uinput helper, static ARM build + source)
 ```
 
 ## Contributing

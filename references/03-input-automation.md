@@ -3,37 +3,70 @@
 Target: reMarkable 2 only. Paper Pro deltas are flagged `PAPER-PRO` inline —
 never reuse rM2 node names, paths, or coordinate maxima there.
 
-Grounding: kernel event-codes / multi-touch-protocol / uinput docs,
-`remarkable.guide/devel/device/input.html`, svenar hexdump captures,
-oxide#48 node mapping, oxide `inject_evdev` + `evdevdevice` precedents,
-python-evdev / libevdev docs.
+ Grounding: kernel event-codes / multi-touch-protocol / uinput docs,
+ `remarkable.guide/devel/device/input.html`, svenar hexdump captures,
+ oxide#48 node mapping, oxide `inject_evdev` + `evdevdevice` precedents,
+ python-evdev / libevdev docs — plus LIVE EVIDENCE 2026-09-17: static ARM
+ helper `scripts/rm-input/` driving taps and swipes on-device, every act
+ screenshot-verified (tile open, X close, grid scroll + byte-exact
+ restore). Tap + swipe: WORKING. Pen stroke / KEY_POWER: not implemented.
 
-## 1. Device mapping (rM2)
+ ## 1. Device mapping (rM2) — probed live 2026-09-17 (`rm-input --probe`)
 
-| Node | Name / by-path | Function |
-|---|---|---|
-| `/dev/input/event0` | `gpio-keys` / `by-path/platform-gpio-keys-event` | Power button only (rM2 has NO home buttons; rM1 differed) |
-| `/dev/input/event1` | Wacom digitizer / `by-path/platform-30a20000.i2c-event-mouse`; also `touchscreen0 -> event1` (misleading name) | Pen: hover, touch, pressure, tilt, eraser |
-| `/dev/input/event2` | Cypress TTSP / `by-path/platform-30a40000.i2c-event` | Capacitive finger touch, Type-B MT |
+ | Node | Name | Function |
+ |---|---|---|
+ | `/dev/input/event0` | `30370000.snvs:snvs-powerkey` | Power button only (rM2 has NO home buttons; rM1 differed) |
+ | `/dev/input/event1` | `Wacom I2C Digitizer` (`touchscreen0 -> event1`, misleading name) | Pen: hover, touch, pressure, tilt, eraser |
+ | `/dev/input/event2` | `pt_mt` | Capacitive finger touch, Type-B MT |
 
 `PAPER-PRO`: node numbers/names WILL differ (new SoC, changed DT
 addresses). Rediscover via §2, do not reuse the by-path strings above.
 
 ## 2. Discovery — NEVER hardcode event numbers
 
-```sh
-# Names for every node (EVIOCGNAME equivalent, no extra packages):
-grep -H . /sys/class/input/event*/device/name
-# Capabilities bitmask per node:
-cat /sys/class/input/event2/device/capabilities/*
-# Canonical symlink check (event1 on rM2, event0 on rM1):
-readlink /dev/input/touchscreen0
-# Confirm hardware generation:
-cat /sys/devices/soc0/machine   # expect: reMarkable 2.0
-# Full caps + axis ranges (needs evtest: Toltec/entware `opkg install evtest`,
-# or python-evdev's evtest.py clone):
-evtest /dev/input/event2
-```
+ ```sh
+ # Names for every node (EVIOCGNAME equivalent, no extra packages):
+ grep -H . /sys/class/input/event*/device/name
+ # Capabilities bitmask per node:
+ cat /sys/class/input/event2/device/capabilities/*
+ # Confirm hardware generation:
+ cat /sys/devices/soc0/machine   # expect: reMarkable 2.0
+ # Full caps + axis ranges, no tablet-side packages (static helper):
+ /tmp/rm-input --probe
+ ```
+
+ Live `--probe` output (fw 20260827113527 — the touchscreen block is the
+ contract the helper clones):
+
+ ```
+ /dev/input/event0 30370000.snvs:snvs-powerkey ev=00000003
+   key: [3]=00100000
+   abs:
+ /dev/input/event1 Wacom I2C Digitizer ev=0000000b
+   key: [10]=00001c03
+   abs: [0]=0f000003
+   absinfo 00: val=7124 min=0 max=20966 fuzz=0 flat=0 res=100
+   absinfo 01: val=9771 min=0 max=15725 fuzz=0 flat=0 res=100
+   absinfo 18: val=0 min=0 max=4095 fuzz=0 flat=0 res=0
+   absinfo 19: val=86 min=0 max=255 fuzz=0 flat=0 res=0
+   absinfo 1a: val=-2700 min=-9000 max=9000 fuzz=0 flat=0 res=0
+   absinfo 1b: val=1800 min=-9000 max=9000 fuzz=0 flat=0 res=0
+ /dev/input/event2 pt_mt ev=0000000f
+   key: [1]=f8000000 [2]=00000007
+   abs: [0]=02000000 [1]=06f38000
+   absinfo 19: val=0 min=0 max=255 fuzz=0 flat=0 res=0
+   absinfo 2f: val=0 min=0 max=31 fuzz=0 flat=0 res=0
+   absinfo 30: val=0 min=0 max=255 fuzz=0 flat=0 res=0
+   absinfo 31: val=0 min=0 max=255 fuzz=0 flat=0 res=0
+   absinfo 34: val=0 min=-127 max=127 fuzz=0 flat=0 res=0
+   absinfo 35: val=0 min=0 max=1403 fuzz=0 flat=0 res=0
+   absinfo 36: val=0 min=0 max=1871 fuzz=0 flat=0 res=0
+   absinfo 37: val=0 min=0 max=1 fuzz=0 flat=0 res=0
+   absinfo 39: val=0 min=0 max=65535 fuzz=0 flat=0 res=0
+   absinfo 3a: val=0 min=0 max=255 fuzz=0 flat=0 res=0
+ node=/dev/input/event2 x=[0..1403] y=[0..1871] uinput=present
+ ```
+
 
 `evtest` output shape:
 
@@ -45,9 +78,9 @@ Event: time ..., type 3 (EV_ABS), code 54 (ABS_MT_POSITION_Y), value 800
 Event: time ..., type 0 (EV_SYN), code 0 (SYN_REPORT), value 0
 ```
 
-Get axis minima/maxima from the `evtest` caps dump or `EVIOCGABS`
-ioctl at runtime. Touch X/Y map to screen pixels; pen X/Y are Wacom
-digitizer units (5-digit) and need scaling (§4).
+ Get axis minima/maxima from `/tmp/rm-input --probe` (§2 dump above) —
+ no evtest on stock firmware. Touch X/Y map to screen pixels (§4 Y flip);
+ pen X/Y are Wacom digitizer units (5-digit) and need scaling (§4).
 
 Raw frame format (for log decoding only — never inject this way):
 16-byte LE `struct input_event { timeval sec,usec; __u16 type,code;
@@ -84,10 +117,13 @@ systemd/logind policy on top of this key.
 
 - Display: **1404 × 1872 portrait**. (Native panel is landscape
   1872×1404 with the pen at the bottom; Qt rotates to portrait.)
-- Touch `ABS_MT_POSITION_X` ∈ [0, 1404), Y ∈ [0, 1872) — rM2 needs no
-  X-inversion (rM1 needed `WIDTH-X`); Y may still need `HEIGHT-Y` in raw
-  replay stacks (Qt handles it). Verify orientation on-device with a tap
-  + screenshot before scripting a flow.
+ - Touch device axes == screen pixels 1:1 in range, but device Y runs
+   BOTTOM-up: raw `(57,61)` lands at screen bottom-left. PROVEN live
+   2026-09-17 (raw tap opened the wrong tile; screenshot showed the
+   flip; corrected mapping verified both directions). The helper takes
+   SCREEN coords and applies `dev_y = 1871 - screen_y` internally —
+   never pre-flip when using the scripts. No X inversion (rM1 needed
+   `WIDTH-X`; rM2 does not).
 - Pen: scale digitizer units to pixels at runtime, never hardcode maxima:
 
 ```python
@@ -98,80 +134,55 @@ py = raw_y * 1872 // y_max   # maxima from EVIOCGABS / evtest caps
 - Pressure/distance/tilt are auxiliary — set plausible values, not exact
   ones. Eraser end = `BTN_TOOL_RUBBER` instead of `BTN_TOOL_PEN`.
 
-## 5. Injection — uinput is the ONLY supported path
+ ## 5. Injection — static helper over uinput (WORKING, verified 2026-09-17)
 
-Writing bytes to `/dev/input/eventN` does NOT inject (read-only from an
-app's view). Create a `/dev/uinput` virtual device with matching
-`EV_KEY`+`EV_ABS` bits + absinfo, then `write()` frames. `sendevent`
-(Android toolbox) is NOT shipped on stock rM2; libevdev-C via the
-reMarkable toolchain always works; oxide `inject_evdev` is the on-device
-precedent. python-evdev needs `pip install evdev` on the host for syntax
-checks (Toltec/opkg on-device package name: `pyevdev`).
+ Writing bytes to `/dev/input/eventN` does NOT inject (read-only from an
+ app's view). The supported path is `scripts/rm-input/`: a small Rust
+ helper, statically linked for ARMv7 (`armv7-unknown-linux-musleabihf`),
+ no tablet-side packages — stock firmware has no Python, no evtest, no
+ `sendevent`. It creates a `/dev/uinput` virtual device cloning the real
+ `pt_mt` caps (§2 block: all MT axes with probed ranges), emits full
+ Type-B frames (SLOT + TRACKING_ID + POSITION_X/Y + PRESSURE 60 +
+ TOUCH_MAJOR/MINOR 40 + TOOL_FINGER, EV_MSC timestamped), and destroys
+ the node. Call it directly over the existing SSH session — no host
+ wrapper, no Python involved. Args are SCREEN coords; the Y flip (§4)
+ is applied inside the helper.
 
-Tap (python-evdev, touch-node clone):
+ ```sh
+ # First use: copy it over (nothing installed, lives in /tmp):
+ scp scripts/rm-input/rm-input root@10.11.99.1:/tmp/rm-input
+ scripts/rm-ssh.sh -- chmod +x /tmp/rm-input
+ # Then drive it (1 s sleep covers the e-ink settle before verifying):
+ scripts/rm-ssh.sh -- /tmp/rm-input tap 513 1176; sleep 1
+ scripts/rm-ssh.sh -- /tmp/rm-input swipe 700 1300 700 700 24 12; sleep 1
+ scripts/rm-ssh.sh -- /tmp/rm-input --probe    # on-tablet caps dump
+ ```
 
-```python
-from evdev import UInput, ecodes as e
-caps = {e.EV_KEY: [e.BTN_TOUCH],
-        e.EV_ABS: [(e.ABS_MT_SLOT, (0, 1, 0, 0)),
-                   (e.ABS_MT_TRACKING_ID, (0, 65535, 0, 0)),
-                   (e.ABS_MT_POSITION_X, (0, 1403, 0, 0)),
-                   (e.ABS_MT_POSITION_Y, (0, 1871, 0, 0)),
-                   (e.ABS_MT_PRESSURE, (0, 255, 0, 0))]}
-ui = UInput(caps, name='rm2-touch-inject')
-x, y = 702, 936
-ui.write(e.EV_ABS, e.ABS_MT_SLOT, 0)
-ui.write(e.EV_ABS, e.ABS_MT_TRACKING_ID, 42)
-ui.write(e.EV_ABS, e.ABS_MT_POSITION_X, x)
-ui.write(e.EV_ABS, e.ABS_MT_POSITION_Y, y)
-ui.write(e.EV_ABS, e.ABS_MT_PRESSURE, 60)
-ui.write(e.EV_SYN, e.SYN_REPORT, 0)                          # down
-ui.write(e.EV_ABS, e.ABS_MT_TRACKING_ID, 0xFFFFFFFF)         # up (-1)
-ui.write(e.EV_SYN, e.SYN_REPORT, 0)
-ui.close()
-```
+ Two timing lessons, both learned the hard way live:
 
-Swipe (same device, interpolated frames, deterministic timing):
+ - 1 s device settle after `UI_DEV_CREATE` before the first event —
+   Qt's inotify rescan must see the node or the gesture is silently
+   dropped (150 ms was NOT enough; zero-frame taps did nothing). Built
+   into the helper; never skip it.
+ - 0.5 s linger after lift before `UI_DEV_DESTROY` (also in the helper),
+   plus ~1 s host-side sleep for e-ink before the verify screenshot.
 
-```python
-import time
-steps, t0, t1 = 24, (200, 1500), (1200, 400)
-ui.write(e.EV_ABS, e.ABS_MT_SLOT, 0)
-ui.write(e.EV_ABS, e.ABS_MT_TRACKING_ID, 43)
-for i in range(steps + 1):
-    x = int(t0[0] + (t1[0] - t0[0]) * i / steps)
-    y = int(t0[1] + (t1[1] - t0[1]) * i / steps)
-    ui.write(e.EV_ABS, e.ABS_MT_POSITION_X, x)
-    ui.write(e.EV_ABS, e.ABS_MT_POSITION_Y, y)
-    ui.write(e.EV_ABS, e.ABS_MT_PRESSURE, 60)
-    ui.write(e.EV_SYN, e.SYN_REPORT, 0)
-    if i < steps:
-        time.sleep(0.012)   # ~12 ms between frames, none after the final frame before lift; then settle 0.5-1.0 s after lift, verify by screenshot
-ui.write(e.EV_ABS, e.ABS_MT_TRACKING_ID, 0xFFFFFFFF)
-ui.write(e.EV_SYN, e.SYN_REPORT, 0)
-```
+ Bounds (enforced inside the helper — out-of-range input errors out,
+ nonzero exit): tap X in [0, 1404), Y in [0, 1872); swipe adds STEPS
+ in [1, 200], STEP_MS in [0, 5000]. Fixed tracking IDs (42 tap /
+ 43 swipe) — no concurrent runs.
 
-Pen stroke: same pattern on pen caps (`BTN_TOOL_PEN=1, BTN_TOUCH=1,
-ABS_X/Y, ABS_PRESSURE 0..~2000, ABS_TILT_X/Y`) with per-frame
-`SYN_REPORT`; hover = `BTN_TOOL_PEN=1, BTN_TOUCH=0, ABS_DISTANCE>0`.
+ Rebuild the helper (prebuilt binary ships at `scripts/rm-input/rm-input`):
 
-Power key (or headless `systemctl suspend` instead):
+ ```sh
+ cd scripts/rm-input
+ RUSTFLAGS="-C link-self-contained=yes -C linker=rust-lld" \
+   cargo build --target armv7-unknown-linux-musleabihf
+ ```
 
-```python
-ui.write(e.EV_KEY, e.KEY_POWER, 1)
-ui.write(e.EV_SYN, e.SYN_REPORT, 0)
-time.sleep(0.1)
-ui.write(e.EV_KEY, e.KEY_POWER, 0)
-ui.write(e.EV_SYN, e.SYN_REPORT, 0)
-```
-
-Ready-made scripts: `scripts/rm-tap.py` (tap), `scripts/rm-swipe.py`
-(swipe) — both support `--dry-run` for host-side validation, plus
-`--settle` (tap) and `--steps` / `--step-delay` / `--settle` (swipe).
-Bounds: `--steps` in [1, 200], `--settle` / `--step-delay` finite in
-[0, 5], with `steps × step-delay` capped at 10 s total (over → exit 2); zero-length swipes warn; fixed tracking IDs (42 tap / 43 swipe),
-no concurrent runs. BTN_TOUCH is advertised in caps for compatibility;
-per-frame emission is ABS+SYN only, matching on-device evtest captures.
+ Pen stroke and KEY_POWER are NOT implemented in the helper (no proven
+ frame shape — do not extrapolate the touch pattern to the Wacom node).
+ Power control headless: `systemctl suspend` over SSH instead.
 
 ## 6. xochitl coexistence
 
@@ -179,9 +190,9 @@ xochitl (Qt) holds all three nodes open. uinput events merge at kernel
 level, so xochitl WILL react — desired for UI automation. To suppress
 side effects during raw pen capture/replay:
 
-- (a) Short critical sections: exclusive `EVIOCGRAB`
-  (`with dev.grab_context()` in python-evdev; oxide evdevdevice
-  `lock()`/`unlock()` + `clear_buffer()` flood precedent). Prefer this.
+ - (a) Short critical sections: exclusive `EVIOCGRAB` ioctl on the node
+   (oxide evdevdevice `lock()`/`unlock()` + `clear_buffer()` flood
+   precedent). Prefer this.
 - (b) Full takeover: `systemctl stop xochitl` (also stop `genie` if
   installed), then `systemctl start xochitl`
   (`daemon-reload; reset-failed xochitl; restart xochitl` recovery,

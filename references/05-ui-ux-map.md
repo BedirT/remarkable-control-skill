@@ -6,6 +6,14 @@ uncertain items are marked `[INFERENCE]` or `[MED]` (medium confidence —
 confirm on-device before pixel-driving).
 
 Paper Pro deltas are flagged inline and **never mixed** into rM2 procedures.
+ > Evidence status 2026-09-17: taps + swipes WORKING via `/tmp/rm-input`
+ > over SSH (static helper, screen coords, Y flip internal), every act
+ > screenshot-verified. VERIFIED: home map §2.1; tile tap opens notebook at
+ > last-viewed page; X top-right (~1345,50) closes doc; home grid scrolls
+ > vertically and restores byte-exact; doc toolbar is 13 icons (§4.1).
+ > NOT verified: hamburger menu contents, bottom-pill actions, page-turn
+ > swipe (mid-page horizontal swipe was a no-op on the last page —
+ > edge-swipe untested), swipe-down-from-top (still DISPUTED, do not script).
 
 ## 1. Canvas and hardware frame
 
@@ -23,52 +31,67 @@ Paper Pro deltas are flagged inline and **never mixed** into rM2 procedures.
 ## 2. Screen hierarchy
 
 ```
-My files (home)
-├── Folder
-│   └── Folder / Document (recursive)
-├── Notebook-or-PDF Document view
-│   ├── Canvas (template-or-PDF base + ink layers)
-│   ├── Left toolbar (collapsible, 9 tools)
-│   ├── Top doc menu (via swipe-down-from-top)
-│   └── Bottom page navigator (+ add page)
+ My files (home)
+ ├── Folder
+ │   └── Folder / Document (recursive)
+ ├── Notebook-or-PDF Document view
+ │   ├── Canvas (template-or-PDF base + ink layers)
+ │   ├── Left toolbar (13 icons: 9 writing tools + eraser, select, layers, undo, redo, template, tag, share, more — see §4.1)
+ │   ├── Top-right X (tap ~1345,50 closes to home — verified)
+ │   └── Bottom page navigator (+ add page)
 └── Quick sheets (auto notebook pinned in My-files root)
 Overlays (from any screen): Share/export · Document settings ·
     Page settings · Settings tree · Help · Search · Power menu
 ```
 
-### 2.1 My files (home)
+### 2.1 My files (home) — verified from live screenshot 2026-09-17
 
-- Grid or list of folders + documents. Top row: hamburger menu,
-  search icon, "new" (create notebook/folder), sort order.
-- Left sidebar filters: **My files / Favorites / Notebooks / PDFs /
-  Ebooks**. Selecting a filter scopes the grid.
-- Bottom strip: WiFi icon (absent when offline), battery, storage/about
-  shortcut. The GPLv3 password/IP page lives under
-  Menu > Settings > Help > Copyright and licenses (OS < 3.9 or > 3.18;
-  OS 3.9–3.18 takes a detour via an "About" entry inside Help).
-- Quick-sheets entry point lives here (see §7).
+- Top bar: hamburger (top-left), reMarkable wordmark (center), status icons
+  (top-right: sync diamond, charging bolt, battery). No search, new, or
+  sort controls in the top bar.
+- Below: "My files" title (left), sort control (right, reads "File size"
+  with a dropdown chevron).
+- Folder grid (4 columns): folder icon + name; long names truncate
+  ("Reinforce... Learning").
+- Document grid with page thumbnails: PDFs render first-page content,
+  notebooks render ink. Label is name plus "Page X of N", or "N% read" for
+  ebooks in progress.
+ - Bottom-center floating pill with three icons (magnifier, +, notebook).
+  Tapping its icons is NOT verified — actions unconfirmed.
+ - Tile tap OPENS the document at its last-viewed page (verified: Planner
+  tile → page 6 of 6). Grid order follows the sort control ("File size")
+  and scroll offset — NEVER hardcode tile coords; locate the tile in a
+  fresh screenshot first, then tap its center.
+ - NOT present on this firmware: left sidebar filters, top-row search/new
+  buttons, bottom status strip. Earlier claims of those removed.
+  Hamburger contents unconfirmed (menu itself never captured open).
 
-### 2.2 Top bar, hamburger, search
+### 2.2 Top bar, hamburger, search — [STALE: contradicts verified §2.1]
+
+The table below describes chrome that is NOT on screen in the 2026-09-17
+capture (no top-bar search/new/sort, no sidebar, no bottom strip). Kept for
+reference until re-verified; do not drive pixel paths from it.
 
 | Element | Location | Opens |
 |---|---|---|
-| Hamburger (≡) | Top-left | Main menu: New notebook/folder, sort, view toggle, Settings, Help |
-| Search (magnifier) | Top bar | Search overlay incl. handwriting search (needs Connect account) |
-| New (+) | Top bar | Create notebook / folder / Quick-sheet page |
-| Sort | Top bar | Name / modified / type ordering |
-| WiFi / battery | Bottom strip | Status only (no action); offline ⇒ sync/Connect/Drive actions gated |
+| Hamburger (≡) | Top-left | [INFERENCE] Main menu contents unconfirmed |
+| Search (magnifier) | Bottom-center pill, left icon [INFERENCE] | Search overlay incl. handwriting search (needs Connect account) |
+| New (+) | Bottom-center pill, middle icon [INFERENCE] | Create notebook / folder / Quick-sheet page |
+| Sort | Under "My files" title, right ("File size" + chevron) | Name / modified / type ordering [INFERENCE: options unconfirmed] |
+| WiFi / battery | Top-right status icons | Status only (no action) |
 
-### 2.3 Document view
+ ### 2.3 Document view — verified from live screenshots 2026-09-17
 
-- **Canvas layers (bottom → top):** template-or-PDF base layer →
-  one or more ink/pen layers → annotation layer (hide/show toggle) →
-  selection/highlight overlays. PDF originals stay unmodified;
-  strokes are stored as overlays.
-- **Left toolbar:** collapsible vertical strip, 9 tools (see §4).
-- **Top doc menu:** revealed by swipe-down-from-top; document title,
-  Share, Document settings, Page settings, close.
-- **Bottom page navigator:** page thumbnails / page number, swipe or
-  tap to move, "+" adds a page (notebook) or blank page (PDF).
+ - **Close:** X top-right (~1345,50) returns to home (verified 3x).
+ - **Left toolbar:** 13-icon vertical strip, top→bottom: pen-dot (tool
+  indicator), writing tool (A-nib icon, selected-underline), highlighter,
+  T text, eraser, selection marquee, layers, undo, redo, template grid,
+  tag, share/export, ⋮ more. Active tool shows a dot; selected tool gets
+  a black tile.
+ - **Top doc menu:** no title bar on the canvas — close is X only.
+ - **Bottom page navigator:** page-turn swipe NOT confirmed: a mid-page
+  right-to-left swipe was a no-op on the last page of a 6-page notebook;
+  edge-swipe untested. Use the navigator UI once its tap targets are mapped.
 
 ## 3. Overlays
 
@@ -81,11 +104,21 @@ Overlays (from any screen): Share/export · Document settings ·
 | Help | Hamburger → Help | Guides, Copyrights and licenses (SSH password + IPs under GPLv3 header) |
 | Search | Top-bar magnifier | File-name search; handwriting-content search with Connect |
 | Power menu | Long-press power button | Sleep, power off, restart, (cancel) |
+ ## 4. Toolbar — 13-icon strip (9 writing tools + page tools)
 
-## 4. Toolbar — 9 writing tools
+ ### 4.1 Strip layout (verified order, top→bottom, 2026-09-17)
 
-Official set is 9 tools. Six names are report-confirmed; the remaining
-three are `[MED — confirm exact labels on-device]`.
+ 1. pen-dot (active-tool indicator) · 2. writing tool (A-nib) ·
+ 3. highlighter · 4. T text · 5. eraser · 6. selection marquee ·
+ 7. layers · 8. undo · 9. redo · 10. template grid · 11. tag ·
+ 12. share/export · 13. ⋮ more. Writing-tool icons 2–4 switch with the
+ selected tool (only one visible at a time); the picker names below are
+ the 9 official tools.
+
+ ### 4.2 The 9 writing tools
+
+ Official set is 9 tools. Six names are report-confirmed; the remaining
+ three are `[MED — confirm exact labels on-device]`.
 
 | # | Tool | Thickness | Ink on rM2 | Notes |
 |---|---|---|---|---|
@@ -115,10 +148,12 @@ Shared rules:
 
 ## 5. Gesture table
 
-| Gesture | Context | Effect |
-|---|---|---|
-| Swipe down from top edge | Document view | Closes document → back to My files (also reveals top doc menu on partial swipe) |
-| Tap left / right edge | Reading Mode (PDF/EPUB) | Previous / next page |
+ | Gesture | Context | Effect |
+ |---|---|---|
+ | Tap document tile | My files grid | Opens doc at last-viewed page [VERIFIED 2026-09-17] |
+ | Tap X top-right (~1345,50) | Document view | Closes to home [VERIFIED 2026-09-17] |
+ | Vertical swipe | My files grid | Scrolls; reverse swipe restores byte-exact [VERIFIED 2026-09-17] |
+ | Swipe down from top edge | Document view | [DISPUTED by owner — do not script] Alleged: closes document / reveals menu. Contradictory as written; needs screenshot proof. |
 | Tap corner | Document view | Toggles bookmark on current page |
 | Long-press corner | Document view | Edits bookmark description |
 | Two-finger swipe left/right | Document view | Switch document / cycle recent files |

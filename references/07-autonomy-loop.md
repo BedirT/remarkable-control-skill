@@ -10,9 +10,10 @@ step, screenshot-verify everything, fail fast and recover deterministically.
    pre-installed key is the deterministic path — no passwords, no
    pairing codes, no prompts. WiFi SSH is secondary; cloud pairing is
    out of the autonomous path entirely.
-2. **One action, then verify.** Every step is exactly one input event
-   (tap / swipe / key) or one file operation, followed by a fresh
-   screenshot plus a byte-level check. Never chain speculative actions.
+ 2. **One action, then verify.** Every step is exactly one tap/swipe
+   (`/tmp/rm-input` over SSH, 03 §5) or one file operation, followed by
+   a fresh screenshot plus a byte-level check. Never chain speculative
+   actions.
 3. **Fail fast, recover by table.** SSH probes, capture, and injection
    all have short timeouts (§4). On failure, run the matching recovery
    (§5) — never retry blindly, never prompt the user.
@@ -76,9 +77,8 @@ Then every autonomous command is `ssh remarkable …` / `scp … :
 │   a) file op: curl POST /upload / GET           │
 │      /download/{guid}/pdf, or ssh+rsync         │
 │      (stop xochitl before tree writes)          │
-│   b) input: one uinput tap / swipe /            │
-│      pen stroke / KEY_POWER via the             │
-│      injector (12 ms frame interp)              │
+ │   b) input: one tap / swipe via                 │
+ │      /tmp/rm-input over SSH (03 §5)             │
 │          │                                      │
 │ VERIFY: re-capture → PNG + raw; expect          │
 │   10513152 B raw (02 §2); diff against          │

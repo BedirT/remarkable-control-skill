@@ -27,15 +27,16 @@ Backend picker:
 | Tool | Repo | Lang / needs | Status | Use for |
 |---|---|---|---|---|
 | libevdev (C read + uinput) | https://gitlab.freedesktop.org/libevdev/libevdev — docs http://www.freedesktop.org/software/libevdev/doc/latest | C, reMarkable toolchain | Maintained upstream | Robust on-device injector; prefer over raw ioctls |
-| python-evdev | https://github.com/gvalkov/python-evdev — docs https://python-evdev.readthedocs.io/ | Python; needs pip/opkg (`pyevdev`) on device | Maintained upstream | `UInput`, `grab_context`, `evtest.py` clone; fastest scripting path |
+ | python-evdev | https://github.com/gvalkov/python-evdev — docs https://python-evdev.readthedocs.io/ | Python; needs pip/opkg (`pyevdev`) on device | Maintained upstream | Superseded on stock fw (no Python on tablet): use `scripts/rm-input/` helper instead; still fine for host-side prototyping |
 | evemu (record / replay) | https://gitlab.freedesktop.org/libevdev/evemu | C tools, cross-compiled | Maintained upstream | `evemu-record` / `play` / `describe` gesture macros |
 | evtest | https://gitlab.freedesktop.org/libevdev/evtest (or Toltec `opkg install evtest` (Toltec: OS <= 3.3.2)) | Binary on device | Maintained upstream | Capability dumps, absinfo maxima, live event watches |
 | oxide `inject_evdev` | https://github.com/Eeems-Org/oxide/tree/master/applications/inject_evdev | C++ (Qt-era precedent) | Precedent, stable | String-to-evdev writer covering ABS/KEY/SYN/REL |
 | rust `evdev` crate | https://docs.rs/evdev/latest/evdev/ | Rust | Maintained upstream | Alternative injector stack |
 | node `evdev` | https://www.npmjs.com/package/evdev | Node | Community | Alternative injector stack |
 
-Ground truth behind all of them: `event0` = gpio-keys (`KEY_POWER`
-only), `event1` = Wacom pen, `event2` = Type-B multitouch; inject via
+ Ground truth behind all of them (probed live 2026-09-17): `event0` =
+ `30370000.snvs:snvs-powerkey` (`KEY_POWER` only), `event1` = Wacom pen,
+ `event2` = `pt_mt` Type-B multitouch; inject via
 `/dev/uinput` virtual devices only — writing `/dev/input/eventN` does
 not inject; `sendevent` is not shipped stock. Kernel references:
 https://www.kernel.org/doc/html/v5.4/input/event-codes.html,
@@ -84,8 +85,9 @@ last-listed folder — list the target folder first), `GET
 2. **Act (bytes):** USB web UI (`curl` against `10.11.99.1`) or SSH +
    rsync against `/home/root/.local/share/remarkable/xochitl/`
    (stop xochitl before writing the tree, restart after).
-3. **Act (pixels):** python-evdev / libevdev uinput injector
-   (tap/swipe scripts shipped; pen stroke + KEY_POWER via the 03 section-5 pattern (no dedicated script)).
+ 3. **Act (pixels):** `/tmp/rm-input` over `scripts/rm-ssh.sh` (static
+   `scripts/rm-input/` uinput helper, scp'd to /tmp on first use;
+   pen stroke + keys not implemented).
 4. **Render ink:** rmscene / rmc for v6; `rmapi geta` only for basic
    PDF+annotations while rmapi lasts.
 5. **Self-host (optional):** rmfakecloud + proxy for sync/WebDAV/FTP;
