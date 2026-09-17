@@ -171,7 +171,7 @@ py = raw_y * 1872 // y_max   # maxima from EVIOCGABS / evtest caps
  advertises axis 0x34); NO tool-type, NO slot, NO BTN_TOUCH events;
  eased path ~440 px in 160-250 ms with a 2.5 s pair gap. Run it on a
  last-page canvas, then judge by NAVIGATOR page count (+1 per pair) —
- creation does not navigate, so canvas screenshots hide it.
+ creation navigates to the new blank, so canvas bytes still match.
 
  Two timing lessons, both learned the hard way live:
 
@@ -199,9 +199,38 @@ py = raw_y * 1872 // y_max   # maxima from EVIOCGABS / evtest caps
    cargo build --target armv7-unknown-linux-musleabihf
  ```
 
- Pen stroke and KEY_POWER are NOT implemented in the helper (no proven
- frame shape — do not extrapolate the touch pattern to the Wacom node).
+ Pen strokes ARE implemented (`pen`/`penraw`/`penpoly`, SVG via
+ `scripts/rm-svg.py`) but BLOCKED at the input layer — see §5b.
  Power control headless: `systemctl suspend` over SSH instead.
+
+ ## 5b. Pen injection (BLOCKED 2026-09-18 — xochitl never opens hotplug pen nodes)
+
+ The Wacom I2C Digitizer was fully probed (`--probe`: X 0..20966,
+ Y 0..15725 res 100, PRESSURE 0..4095, DISTANCE 0..255,
+ TILT ±9000; keys TOOL_PEN/TOOL_RUBBER/TOUCH/STYLUS/STYLUS2;
+ ids bus 0x18 vendor 0x2d1f product 0x0095 version 0x1231).
+ The helper clones all of it — `--probe` shows the clone
+ bit-identical to the real node — and emits well-formed strokes
+ (hover/proximity → TOUCH with position+pressure → lift; verified
+ on the wire by reading the clone's own event node, 16-byte
+ 32-bit input_event structs). Screen→digitizer mapping hypothesis:
+ digX = screenY × 11.199, digY = screenX × 11.199 (`penraw` takes
+ device coords for calibration).
+
+ Result: ~12 strokes, zero ink, blank canvas every time. Root cause
+ is NOT caps or framing — `/proc/<xochitl>/fd` shows xochitl opens
+ hotplug FINGER clones immediately (fd 41 → new node) but never a
+ pen node: not at 4 s, not over a 52 s hold, not during live strokes
+ (0 opens at t8/t20/t30/t38). The Qt tablet path does not rescan;
+ only a xochitl restart with a persistent node present could pick
+ it up, and restarts are out of bounds. Tried and ruled out:
+ generic name, exact name clone, I2C bus clone, ID clone,
+ PROP_DIRECT on/off, TOUCH folded into first contact frame,
+ pressure 1500 const, unique device name. `penhold SEC` keeps a
+ node alive for `--probe` comparison; `scripts/rm-svg.py` turns
+ SVG paths/polylines (M/L/H/V/C-curves flattened, Q elevated) into
+ `penpoly` multi-point strokes and is tested host-side — it runs
+ unchanged the day the pen path opens.
 
 ## 6. xochitl coexistence
 

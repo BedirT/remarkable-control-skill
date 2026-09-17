@@ -28,6 +28,27 @@ const ABS_MT_ORIENTATION: u16 = 0x34;
 const MT_TOOL_FINGER: i32 = 0;
 const TOUCH_SIZE: i32 = 40;
 const PROP_DIRECT: u32 = 1;
+const BTN_TOOL_PEN: u16 = 0x140;
+const BTN_TOOL_RUBBER: u16 = 0x141;
+const BTN_STYLUS: u16 = 0x14b;
+const BTN_STYLUS2: u16 = 0x14c;
+const ABS_X: u16 = 0x00;
+const ABS_Y: u16 = 0x01;
+const ABS_PRESSURE: u16 = 0x18;
+const ABS_DISTANCE: u16 = 0x19;
+const ABS_TILT_X: u16 = 0x1a;
+const ABS_TILT_Y: u16 = 0x1b;
+// Wacom I2C Digitizer ranges, probed live 2026-09-18 via --probe.
+const PEN_X_MAX: i32 = 20966;
+const PEN_Y_MAX: i32 = 15725;
+const PEN_PRESSURE_MAX: i32 = 4095;
+#[repr(C)]
+struct AbsSetup {
+    code: u16,
+    pad: u16,
+    info: AbsInfo,
+}
+const UI_ABS_SETUP: u64 = 0x401c5504;
 
 const UI_SET_EVBIT: u64 = 0x40045564;
 const UI_SET_KEYBIT: u64 = 0x40045565;
@@ -306,6 +327,14 @@ fn dump_caps() {
         ioctl_len(fd, eviocgbit(1, 96), key.as_mut_ptr() as *mut _);
         ioctl_len(fd, eviocgbit(3, 32), abs.as_mut_ptr() as *mut _);
         println!("{} {} ev={:08x}", path, nm, evb[0]);
+        #[repr(C)]
+        struct InputId { bustype: u16, vendor: u16, product: u16, version: u16 }
+        let mut id: InputId = unsafe { zeroed() };
+        const EVIOCGID: u64 = 0x80084502;
+        if ioctl_len(fd, EVIOCGID, &mut id as *mut _ as *mut _) {
+            println!("  id: bus={:#06x} vendor={:#06x} product={:#06x} version={:#06x}",
+                id.bustype, id.vendor, id.product, id.version);
+        }
         print!("  key:");
         for (i, w) in key.iter().enumerate() {
             if *w != 0 {
@@ -397,13 +426,6 @@ fn create_device(x_max: i32, y_max: i32) -> RawFd {
         unsafe { libc::close(fd) };
         die("UI_DEV_SETUP failed");
     }
-    #[repr(C)]
-    struct AbsSetup {
-        code: u16,
-        pad: u16,
-        info: AbsInfo,
-    }
-    const UI_ABS_SETUP: u64 = 0x401c5504;
     for (code, min, max) in [(ABS_MT_SLOT, 0, 31), (ABS_MT_TRACKING_ID, 0, 65535), (ABS_MT_POSITION_X, 0, x_max), (ABS_MT_POSITION_Y, 0, y_max), (ABS_MT_PRESSURE, 0, 255), (ABS_MT_TOUCH_MAJOR, 0, 255), (ABS_MT_TOUCH_MINOR, 0, 255), (ABS_MT_TOOL_TYPE, 0, 1), (ABS_MT_ORIENTATION, -127, 127)] {
         let mut s = AbsSetup {
             code,
@@ -440,6 +462,138 @@ fn parse(args: &[String], i: usize, what: &str) -> i32 {
     args.get(i)
         .and_then(|s| s.parse::<i32>().ok())
         .unwrap_or_else(|| die(&format!("bad {}", what)))
+}
+
+// Virtual pen cloning the Wacom I2C Digitizer caps (probed 2026-09-18).
+fn create_pen_device() -> RawFd {
+    let fd = open("/dev/uinput", libc::O_WRONLY | libc::O_NONBLOCK);
+    if fd < 0 {
+        die("cannot open /dev/uinput");
+    }
+    set_bit(fd, UI_SET_EVBIT, EV_SYN as u32, "UI_SET_EVBIT/SYN");
+    set_bit(fd, UI_SET_EVBIT, EV_KEY as u32, "UI_SET_EVBIT/KEY");
+    set_bit(fd, UI_SET_EVBIT, EV_ABS as u32, "UI_SET_EVBIT/ABS");
+    for b in [BTN_TOOL_PEN, BTN_TOOL_RUBBER, BTN_TOUCH, BTN_STYLUS, BTN_STYLUS2] {
+        set_bit(fd, UI_SET_KEYBIT, b as u32, "UI_SET_KEYBIT/pen");
+    }
+    for b in [ABS_X, ABS_Y, ABS_PRESSURE, ABS_DISTANCE, ABS_TILT_X, ABS_TILT_Y] {
+        set_bit(fd, UI_SET_ABSBIT, b as u32, "UI_SET_ABSBIT/pen");
+    }
+    // Identity clones the real node (name + I2C bus + no props):
+    // the generic rm2-pen-inject device drew nothing (blank canvas).
+    let mut setup: UinputSetup = unsafe { zeroed() };
+    setup.bustype = 0x18; // BUS_I2C, like the real Wacom node
+    setup.vendor = 0x2d1f;
+    setup.product = 0x0095;
+    setup.version = 0x1231;
+    let name = b"rm2-pen-inject";
+    setup.name[..name.len()].copy_from_slice(name);
+    if !ioctl(fd, UI_DEV_SETUP, &mut setup as *mut _ as *mut _) {
+        unsafe { libc::close(fd) };
+        die("UI_DEV_SETUP failed");
+    }
+    for (code, min, max, res) in [(ABS_X, 0, PEN_X_MAX, 100), (ABS_Y, 0, PEN_Y_MAX, 100), (ABS_PRESSURE, 0, PEN_PRESSURE_MAX, 0), (ABS_DISTANCE, 0, 255, 0), (ABS_TILT_X, -9000, 9000, 0), (ABS_TILT_Y, -9000, 9000, 0)] {
+        let mut s = AbsSetup {
+            code,
+            pad: 0,
+            info: AbsInfo { value: 0, minimum: min, maximum: max, fuzz: 0, flat: 0, resolution: res },
+        };
+        if !ioctl(fd, UI_ABS_SETUP, &mut s as *mut _ as *mut _) {
+            unsafe { libc::close(fd) };
+            die("UI_ABS_SETUP failed");
+        }
+    }
+    if !ioctl(fd, UI_DEV_CREATE, std::ptr::null_mut()) {
+        unsafe { libc::close(fd) };
+        die("UI_DEV_CREATE failed");
+    }
+    msleep(1000);
+    fd
+}
+
+// Screen (1404x1872 portrait) to digitizer mapping, hypothesis A:
+// digitizer X = screen Y * k, digitizer Y = screen X * k,
+// k = 20966/1872 = 15725/1404 = 11.199. Calibrate with penraw
+// if ink lands mirrored.
+fn map_pen(sx: i32, sy: i32) -> (i32, i32) {
+    (((clamp(sy, 0, 1871, "Y") as f64) * 11.199) as i32,
+     ((clamp(sx, 0, 1403, "X") as f64) * 11.199) as i32)
+}
+
+// One pen-down stroke in DEVICE coords. Hover first (proximity arms the
+// tool), then contact with constant pressure, then a clean lift.
+fn pen_stroke(fd: RawFd, x1: i32, y1: i32, x2: i32, y2: i32, steps: i32, step_ms: u64, press: i32) {
+    emit(fd, EV_KEY, BTN_TOOL_PEN, 1);
+    emit(fd, EV_ABS, ABS_X, x1);
+    emit(fd, EV_ABS, ABS_Y, y1);
+    emit(fd, EV_ABS, ABS_DISTANCE, 86);
+    sync(fd);
+    msleep(100);
+    for i in 0..=steps {
+        if i == 0 {
+            // Touch joins the first contact frame with position+pressure,
+            // never as a position-less frame of its own.
+            emit(fd, EV_KEY, BTN_TOUCH, 1);
+        }
+        emit(fd, EV_ABS, ABS_X, x1 + (x2 - x1) * i / steps);
+        emit(fd, EV_ABS, ABS_Y, y1 + (y2 - y1) * i / steps);
+        emit(fd, EV_ABS, ABS_PRESSURE, press);
+        emit(fd, EV_ABS, ABS_DISTANCE, 0);
+        emit(fd, EV_ABS, ABS_TILT_X, 0);
+        emit(fd, EV_ABS, ABS_TILT_Y, 0);
+        sync(fd);
+        if i < steps {
+            msleep(step_ms);
+        }
+    }
+    emit(fd, EV_ABS, ABS_PRESSURE, 0);
+    emit(fd, EV_KEY, BTN_TOUCH, 0);
+    emit(fd, EV_KEY, BTN_TOOL_PEN, 0);
+    sync(fd);
+}
+
+// Multi-point stroke in DEVICE coords: one hover, one contact pass
+// through every point, one lift. Steps split across segments
+// proportional to segment length (min 1 step per segment).
+fn pen_stroke_multi(fd: RawFd, pts: &[(i32, i32)], steps: i32, step_ms: u64, press: i32) {
+    emit(fd, EV_KEY, BTN_TOOL_PEN, 1);
+    emit(fd, EV_ABS, ABS_X, pts[0].0);
+    emit(fd, EV_ABS, ABS_Y, pts[0].1);
+    emit(fd, EV_ABS, ABS_DISTANCE, 86);
+    sync(fd);
+    msleep(100);
+    // (no lone TOUCH frame: it joins the first contact frame below)
+    let mut lens = Vec::new();
+    let mut total: i64 = 0;
+    for w in pts.windows(2) {
+        let l = ((w[1].0 - w[0].0) as i64).abs() + ((w[1].1 - w[0].1) as i64).abs();
+        lens.push(l);
+        total += l;
+    }
+    for (si, w) in pts.windows(2).enumerate() {
+        let n = if total > 0 {
+            std::cmp::max(1, (lens[si] * steps as i64 / total) as i32)
+        } else {
+            1
+        };
+        for i in 0..=n {
+            if si == 0 && i == 0 {
+                emit(fd, EV_KEY, BTN_TOUCH, 1);
+            }
+            emit(fd, EV_ABS, ABS_X, w[0].0 + (w[1].0 - w[0].0) * i / n);
+            emit(fd, EV_ABS, ABS_Y, w[0].1 + (w[1].1 - w[0].1) * i / n);
+            emit(fd, EV_ABS, ABS_PRESSURE, press);
+            emit(fd, EV_ABS, ABS_DISTANCE, 0);
+            emit(fd, EV_ABS, ABS_TILT_X, 0);
+            emit(fd, EV_ABS, ABS_TILT_Y, 0);
+            sync(fd);
+            msleep(step_ms);
+        }
+    }
+    emit(fd, EV_ABS, ABS_PRESSURE, 0);
+    emit(fd, EV_KEY, BTN_TOUCH, 0);
+    emit(fd, EV_KEY, BTN_TOOL_PEN, 0);
+    sync(fd);
 }
 
 fn main() {
@@ -570,7 +724,74 @@ fn main() {
         println!("ok replay {} events", table.len());
         return;
     }
-    eprintln!("usage: rm-input --probe | tap X Y | swipe X1 Y1 X2 Y2 [STEPS=24] [STEP_MS=12] | replay");
+    if args.len() >= 6 && (args[1] == "pen" || args[1] == "penraw") {
+        let raw = args[1] == "penraw";
+        // Screen coords (portrait 1404x1872) unless penraw (device coords).
+        // Mapping hypothesis A: digitizer X = screen Y * k, digitizer Y
+        // = screen X * k, k = 20966/1872 = 15725/1404 = 11.199.
+        // Calibrate with penraw if ink lands mirrored.
+        let (ax1, ay1, ax2, ay2) = (parse(&args, 2, "X1"), parse(&args, 3, "Y1"), parse(&args, 4, "X2"), parse(&args, 5, "Y2"));
+        let steps = if args.len() > 6 { parse(&args, 6, "STEPS") } else { 24 };
+        let step_ms = if args.len() > 7 { parse(&args, 7, "STEP_MS") as u64 } else { 12 };
+        let press = if args.len() > 8 { parse(&args, 8, "PRESS") } else { 1500 };
+        if steps < 1 || steps > 200 || step_ms > 5000 {
+            die("STEPS 1..200, STEP_MS <= 5000");
+        }
+        let (dx1, dy1, dx2, dy2) = if raw {
+            (clamp(ax1, 0, PEN_X_MAX, "DX1"), clamp(ay1, 0, PEN_Y_MAX, "DY1"),
+             clamp(ax2, 0, PEN_X_MAX, "DX2"), clamp(ay2, 0, PEN_Y_MAX, "DY2"))
+        } else {
+            (((clamp(ay1, 0, 1871, "Y1") as f64) * 11.199) as i32,
+             ((clamp(ax1, 0, 1403, "X1") as f64) * 11.199) as i32,
+             ((clamp(ay2, 0, 1871, "Y2") as f64) * 11.199) as i32,
+             ((clamp(ax2, 0, 1403, "X2") as f64) * 11.199) as i32)
+        };
+        let press = clamp(press, 1, PEN_PRESSURE_MAX, "PRESS");
+        let fd = create_pen_device();
+        pen_stroke(fd, dx1, dy1, dx2, dy2, steps, step_ms, press);
+        destroy(fd);
+        println!("ok pen {} {} -> {} {} steps={}", dx1, dy1, dx2, dy2, steps);
+        return;
+    }
+    if args.len() >= 3 && args[1] == "penhold" {
+        // Debug: create the pen device, keep it alive SEC seconds for
+        // host-side --probe comparison against the real digitizer.
+        let secs = parse(&args, 2, "SEC") as u64;
+        let fd = create_pen_device();
+        println!("holding pen device {}s", secs);
+        msleep(secs * 1000);
+        destroy(fd);
+        println!("ok penhold");
+        return;
+    }
+
+    if args.len() >= 9 && args[1] == "penpoly" {
+        // penpoly STEPS STEP_MS PRESS X1 Y1 X2 Y2 [X3 Y3 ...]:
+        // one pen-down pass through every point (screen coords).
+        let steps = parse(&args, 2, "STEPS");
+        let step_ms = parse(&args, 3, "STEP_MS") as u64;
+        let press = clamp(parse(&args, 4, "PRESS"), 1, PEN_PRESSURE_MAX, "PRESS");
+        if steps < 1 || steps > 2000 {
+            die("STEPS 1..2000");
+        }
+        let rest = &args[5..];
+        if rest.len() < 4 || rest.len() % 2 != 0 {
+            die("penpoly needs >= 2 XY pairs");
+        }
+        let mut pts = Vec::new();
+        for w in rest.chunks(2) {
+            let sx: i32 = w[0].parse().unwrap_or_else(|_| die("bad X"));
+            let sy: i32 = w[1].parse().unwrap_or_else(|_| die("bad Y"));
+            pts.push(map_pen(sx, sy));
+        }
+        let fd = create_pen_device();
+        pen_stroke_multi(fd, &pts, steps, step_ms, press);
+        destroy(fd);
+        println!("ok penpoly {} pts steps={}", pts.len(), steps);
+        return;
+    }
+
+    eprintln!("usage: rm-input --probe | tap X Y | swipe X1 Y1 X2 Y2 [STEPS=24] [STEP_MS=12] | replay [FILE] | pen X1 Y1 X2 Y2 [STEPS=24] [STEP_MS=12] [PRESS=1500] | penraw DX1 DY1 DX2 DY2 ...");
     eprintln!("coords are SCREEN pixels (1404x1872 portrait); Y flip applied internally; replay is device coords");
     exit(2);
 }

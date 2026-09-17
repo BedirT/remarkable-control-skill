@@ -29,8 +29,8 @@ Paper Pro deltas are flagged inline and **never mixed** into rM2 procedures.
  > alternating, major every 3rd frame); the old mid-screen pair shape
  > that failed 6× now creates (11→12). Size threshold between 17 and
  > 40 still unmapped — stay at ≤17. Judge creation by NAVIGATOR
- > page count, never canvas bytes: creation does not navigate, and
- > blank-to-blank compares hide it; home tiles can render stale.
+ > page count, never canvas bytes: creation navigates to the new
+ > blank, so canvas bytes still match; home tiles can render stale.
  > NOT verified: add-page button tap, tool-switch taps, undo/redo,
  > layers panel, template-grid icon (no-op in PDF), Guides/Help/Wi-Fi/
  > Cloud/Security subs, per-file Trash delete/restore, auto-sleep
@@ -146,8 +146,9 @@ Overlays (from any screen): Share/export · Document settings ·
   now uses finger sizes — the skill's swipes are human by default.
  - **Page creation: SOLVED.** Pair of swipes on a last-page canvas,
   +1 page per pair (finger 3→4, replay 4→5 + 5→6, variants →7..11,
-  new default 11→12). Judge by NAVIGATOR count — creation does not
-  navigate, so canvas compares hide it.
+  new default 11→12; navigator "current" follows the new page every
+  time). Judge by NAVIGATOR count — creation navigates to the new
+  blank, so canvas bytes still match.
 
 ## 3. Overlays
 
@@ -221,6 +222,7 @@ Shared rules:
  | Pill calendar ~(813,1683) | Home | Offline toast (cloud-gated) [VERIFIED] |
  | Synthetic swipe, big touch (size 40) | Doc last page | Palm-rejected, NO-OP 0/2 [VERIFIED] |
  | Synthetic swipe, finger sizes (minor 8/17) | Doc last page, any zone | Creates page per pair, incl. old failing shape [VERIFIED] |
+ | Synthetic pen stroke (uinput clone, bit-identical caps) | Doc canvas | IGNORED — xochitl never opens hotplug pen nodes (03 §5b) [VERIFIED BLOCKED] |
  | Toolbar tag ≈(48,1618) | Doc view | Tag sheet: existing tags + New tag [VERIFIED] |
  | Toolbar ⋮ ≈(48,1749) | Doc view | Menu: Email / Convert and Share / Present with Screen Share [VERIFIED] |
  | Toolbar template-grid | PDF view | NO-OP (likely notebook-only) [VERIFIED] |
