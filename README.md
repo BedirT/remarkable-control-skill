@@ -1,8 +1,12 @@
+<p align="center">
+  <img src="assets/banner.png" alt="remarkable-control-skill — agent control for reMarkable 2 — observe · act · verify" width="100%" />
+</p>
+
 <h1 align="center">remarkable-control-skill</h1>
 
 <p align="center">
   <img src="https://img.shields.io/badge/reMarkable-2-black" alt="reMarkable 2" />
-  <img src="https://img.shields.io/badge/transport-USB_SSH-blue" alt="transport: USB SSH" />
+  <img src="https://img.shields.io/badge/tested_on-SW_3.28-green" alt="tested on software 3.28" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license: MIT" />
 </p>
 
