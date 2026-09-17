@@ -10,7 +10,7 @@ stderr warning.
 
 Usage:
     python3 scripts/rm-svg.py drawing.svg [--box X Y W H] [--press A[:B]]
-    [--skip-class NAME] [--skip-fill COLOR]
+    [--speed 1-5] [--skip-class NAME] [--skip-fill COLOR]
     python3 scripts/rm-svg.py drawing.svg --run [--box ...] [--press ...]
 
 --run feeds each stroke to the `pend` daemon's /tmp/pen.fifo over the
@@ -23,13 +23,20 @@ rule — current builds take plain screen coords).
 SVG y grows downward, same as the screen: no axis flip needed.
 """
 import math
+import os
 import re
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
 
 SCREEN_W, SCREEN_H = 1404, 1872
-SSH = ["./scripts/rm-ssh.sh", "--"]
+SSH = [os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                    "rm-ssh.sh"), "--"]
+# Named pen paces: (px per frame, ms per frame). 2 is the default.
+# 1 careful ~50 px/s; 2 tracing ~125 px/s (proven: ~1 px path error);
+# 3 steady ~300 px/s; 4 quick ~800 px/s; 5 device pace, cuts corners.
+SPEEDS = {1: (0.75, 15), 2: (1.5, 12), 3: (3.0, 10), 4: (8.0, 10),
+           5: (25.0, 12)}
 
 
 def fit(viewbox, box):
@@ -186,12 +193,14 @@ def parse_path(d):
         subs.append(cur)
     return [s for s in subs if len(s) > 1]
 
-def stroke_cmds(sub, proj, press0, press1, flip_y=False):
+def stroke_cmds(sub, proj, press0, press1, flip_y=False, step_px=1.5, step_ms=12):
     """One FIFO `S` line per subpath (single pen-down pass).
 
     Pressure ramps press0->press1 along the whole subpath.
     Coords are correct screen pixels. flip_y compensates a legacy
     pend build whose map is y-inverted (deviation, not the rule).
+    step_px/step_ms set the pace: small slow frames track curves,
+    big fast frames let the tablet smoothing cut corners.
     """
     out = []
     for path in sub:
@@ -209,12 +218,12 @@ def stroke_cmds(sub, proj, press0, press1, flip_y=False):
                 math.hypot(b[0] - a[0], b[1] - a[1])
                 for a, b in zip(chunk, chunk[1:])
             )
-            steps = max(8, min(2000, int(total / 1.5) + 1))
+            steps = max(8, min(4000, int(total / step_px) + 1))
             coords = " ".join(f"{int(x)} {int(y)}" for x, y in chunk)
-            # ~1.5 px/frame at 12 ms ~= 125 px/s careful-tracing speed.
-            # v3 at 300 px/s still showed smoothing wobble; slower tracks
-            # tight turns better. A 700 px stroke takes ~6 s. Worth it.
-            out.append(f"S {steps} 12 {press0} {press1} {coords}")
+            # Speed 2 default: ~1.5 px/frame at 12 ms ~= 125 px/s
+            # careful-tracing pace (logo redraw: mean path error ~1 px).
+            # Faster (4-5) reintroduces smoothing corner-cutting.
+            out.append(f"S {steps} {step_ms} {press0} {press1} {coords}")
     return out
 
 
@@ -286,6 +295,7 @@ def main(argv):
     path = argv[0]
     box = [150, 200, SCREEN_W - 300, SCREEN_H - 400]
     press0, press1, run, flip_y = 1500, 1500, False, False
+    speed = 2
     skip = []
     i = 1
     while i < len(argv):
@@ -300,6 +310,16 @@ def main(argv):
         elif argv[i] == "--run":
             run = True
             i += 1
+        elif argv[i] == "--speed" and i + 1 < len(argv):
+            try:
+                speed = int(argv[i + 1])
+            except ValueError:
+                speed = -1
+            if speed not in SPEEDS:
+                print("error: --speed must be 1-5 (see SPEEDS)",
+                      file=sys.stderr)
+                return 2
+            i += 2
         elif argv[i] == "--flip-y":
             flip_y = True
         elif argv[i] in ("--skip-class", "--skip-fill"):
@@ -320,7 +340,8 @@ def main(argv):
     if not subs:
         print("no drawable paths found", file=sys.stderr)
         return 1
-    cmds = stroke_cmds(subs, proj, press0, press1, flip_y)
+    step_px, step_ms = SPEEDS[speed]
+    cmds = stroke_cmds(subs, proj, press0, press1, flip_y, step_px, step_ms)
     print(f"{len(subs)} subpaths -> {len(cmds)} strokes", file=sys.stderr)
     if run:
         import time

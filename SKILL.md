@@ -25,8 +25,8 @@ Your key lives in `/home/root/.ssh/authorized_keys` on the tablet (on `/home`, s
 
 ## Observe–act–verify loop
 
-1. **Observe**: `scripts/rm-capture.py --out screen.png` ([02](references/02-display-screenshot.md) §2). On failure in strict mode: stop with the diagnostic (02 §3; assisted options only if the user allows a human step).
-2. **Act**: one input (`/tmp/rm-input` tap/swipe/pen over SSH, [03](references/03-input-automation.md) §5; SVG line art via `scripts/rm-svg.py --run`) or file op ([04](references/04-files-content.md)); know the screen map ([05](references/05-ui-ux-map.md)). Remote commands go through `scripts/rm-ssh.sh` (ssh options before host, remote command after; use `--` to separate; dangerous ssh options need `--allow-unsafe-ssh-opts`, see [01](references/01-access-auth.md)).
+1. **Observe**: `rmk shot --out screen.png` ([02](references/02-display-screenshot.md) §2). On failure in strict mode: stop with the diagnostic (02 §3; assisted options only if the user allows a human step).
+2. **Act**: one input (`rmk tap` / `rmk swipe`, [03](references/03-input-automation.md) §5; SVG line art via `rmk draw --run`) or file op ([04](references/04-files-content.md)); know the screen map ([05](references/05-ui-ux-map.md)). `rmk ssh -- <cmd>` runs a raw tablet command (ssh options before host, remote command after; use `--` to separate; dangerous ssh options need `--allow-unsafe-ssh-opts`, see [01](references/01-access-auth.md)).
 3. **Verify**: re-screenshot; e-ink needs 0.5–1.0 s settle after input. Never verify by forcing a refresh.
 
  Timeouts: 2 s fail-fast probe, 5 s bulk-transfer default — `scripts/rm-ssh.sh`
@@ -37,9 +37,10 @@ Your key lives in `/home/root/.ssh/authorized_keys` on the tablet (on `/home`, s
 The helper draws real pen strokes, not just taps: a `pend` daemon
 holds one pen device and takes strokes from `/tmp/pen.fifo`
 (`S STEPS STEP_MS P0 P1 X1 Y1 ...`, screen coords, packed mode M1
-is the default). `scripts/rm-svg.py drawing.svg --run` draws
+is the default). `rmk draw drawing.svg --run` draws
 SVG line art (paths/polylines, curves flattened, one pen-down per
-subpath). Every stroke opens with a short light glide that settles
+subpath; `--speed 1-5` sets the pace, default 2 tracing pace, full
+table in [CLI.md](CLI.md)). Every stroke opens with a short light glide that settles
 the tablet's smoothing — without it lines kick sideways near the
 start (that filter settling is the small jump you may still see a
 trace of). Stroke starts under the toolbar (x<~135) are swallowed:

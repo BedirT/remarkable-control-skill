@@ -60,8 +60,8 @@ Copy-paste to your agent:
 
 ```text
 Install the reMarkable 2 skill from https://github.com/BedirT/remarkable-control-skill:
-clone it, follow the README quickstart to connect over USB SSH, and take a
-first screen capture to prove the loop works.
+clone it, put its `rmk` command on your PATH, follow the README quickstart
+to connect over USB SSH, and take a first screen capture to prove the loop works.
 ```
 
 ## Quickstart
@@ -78,7 +78,7 @@ first screen capture to prove the loop works.
 2. Capture the screen (reverse-engineered, zero tablet setup) (`references/02-display-screenshot.md` §2):
 
    ```sh
-   scripts/rm-capture.py --out screen.png   # ~8 s, writes screen.png + screen.raw
+   rmk shot --out screen.png   # ~8 s, writes screen.png + screen.raw
    # Reads xochitl's own composed page (1404x1872 RGB32 QImage) over USB SSH.
    # No tablet-side setup, taps, refresh, or uploads. Pre/post rechecks abort on change.
    # Timing (3 runs, fw 20260827113527): 8.3 s total: snapshot+hash 1.3 s, metadata+recheck+probe 3.7 s, transfer 1.0 s, PNG 0.1 s, final recheck 2.3 s.
@@ -92,10 +92,10 @@ first screen capture to prove the loop works.
    one tap/swipe via `/tmp/rm-input`, or one pen stroke / SVG drawing
    (`references/03-input-automation.md` §5, §5b–§5d):
 ```sh
-scp scripts/rm-input/rm-input root@10.11.99.1:/tmp/rm-input   # first use only
-scripts/rm-ssh.sh -- /tmp/rm-input tap 700 936; sleep 1       # tap center
-python3 scripts/rm-svg.py drawing.svg --run                   # draw line art
-scripts/rm-capture.py --out verify.png                        # prove it
+scp scripts/rm-input/rm-input root@10.11.99.1:/tmp/rm-input   # first use only (runs on your machine, not via rmk)
+rmk tap 700 936                # tap center
+rmk draw drawing.svg --run     # draw line art
+rmk shot --out verify.png      # prove it
 ```
  See `references/07-autonomy-loop.md` for the full loop discipline.
 
@@ -114,7 +114,8 @@ references/
    05-ui-ux-map.md               screen hierarchy, gestures, 13-icon toolbar, states, e-ink design rules
    06-tooling-ecosystem.md       capture / input / file tool comparison with repo links + status
    07-autonomy-loop.md           zero-interruption observe-act-verify discipline, timeouts, recovery
- scripts/                        rm-capture.py (screen capture), rm-ssh.sh (SSH wrapper), rm-input/ (Rust uinput helper, static ARM build + source), rm-svg.py (SVG line art to pen strokes)
+ rmk + CLI.md                  control CLI (tap/swipe/shot/draw/ssh) + its command reference
+ tests/test_rmk.py             host-only CLI tests (no tablet needed)
 ```
 
 ## Contributing

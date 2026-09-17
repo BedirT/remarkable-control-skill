@@ -1,0 +1,200 @@
+#!/usr/bin/env python3
+"""rmk — one command to drive a reMarkable 2 over USB SSH.
+
+Subcommands wrap the skill's scripts with stable flags so agents learn
+one tool instead of five scripts:
+
+    rmk shot                     take a screenshot (read-only)
+    rmk tap X Y                  finger tap, screen pixels (1404x1872)
+    rmk swipe X1 Y1 X2 Y2        finger swipe, natural profile
+    rmk draw FILE.svg --run      draw SVG line art with the pen
+    rmk ssh -- <cmd>             raw command on the tablet (escape hatch)
+
+Connection flags (--host/--key/--timeout) work on every subcommand and
+override RM_HOST / RM_KEY / RM_CONNECT_TIMEOUT. Full reference: CLI.md.
+"""
+import argparse
+import importlib.util
+import os
+import subprocess
+import sys
+
+VERSION = "0.1.0"
+
+ROOT = os.path.dirname(os.path.abspath(__file__))
+SCRIPTS = os.path.join(ROOT, "scripts")
+SSH = os.path.join(SCRIPTS, "rm-ssh.sh")
+REMOTE_INPUT = "/tmp/rm-input"
+
+W, H = 1404, 1872
+
+
+def die(msg, code=2):
+    print("rmk: error: %s" % msg, file=sys.stderr)
+    return code
+
+
+def load(name, filename):
+    spec = importlib.util.spec_from_file_location(
+        name, os.path.join(SCRIPTS, filename))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def apply_conn(args):
+    if args.host:
+        os.environ["RM_HOST"] = args.host
+    if args.key:
+        os.environ["RM_KEY"] = args.key
+    if args.timeout:
+        os.environ["RM_CONNECT_TIMEOUT"] = args.timeout
+
+
+def conn_flags(args):
+    out = []
+    if args.host:
+        out += ["--host", args.host]
+    if args.key:
+        out += ["--key", args.key]
+    if args.timeout:
+        out += ["--timeout", args.timeout]
+    return out
+
+
+def coord(value, limit, name):
+    try:
+        iv = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            "%s must be an integer 0..%d" % (name, limit - 1))
+    if not 0 <= iv < limit:
+        raise argparse.ArgumentTypeError(
+            "%s must be an integer 0..%d" % (name, limit - 1))
+    return iv
+
+
+def px(text):
+    return coord(text, W, "x")
+
+
+def py(text):
+    return coord(text, H, "y")
+
+
+def cmd_tap(args):
+    apply_conn(args)
+    r = subprocess.run([SSH, "--", REMOTE_INPUT, "tap",
+                        str(args.x), str(args.y)])
+    return r.returncode
+
+
+def cmd_swipe(args):
+    apply_conn(args)
+    r = subprocess.run([SSH, "--", REMOTE_INPUT, "swipe",
+                        str(args.x1), str(args.y1),
+                        str(args.x2), str(args.y2),
+                        str(args.steps), str(args.step_ms)])
+    return r.returncode
+
+
+def cmd_shot(args):
+    cap = load("rm_capture", "rm-capture.py")
+    argv = conn_flags(args)
+    if args.out:
+        argv += ["--out", args.out]
+    if args.raw:
+        argv += ["--raw", args.raw]
+    if args.force:
+        argv += ["--force"]
+    if args.dry_run:
+        argv += ["--dry-run"]
+    return cap.main(argv)
+
+
+def cmd_draw(args):
+    svg = load("rm_svg", "rm-svg.py")
+    argv = [args.file]
+    if args.box:
+        argv += ["--box"] + [str(v) for v in args.box]
+    argv += ["--speed", str(args.speed)]
+    if args.press:
+        argv += ["--press", args.press]
+    for c in args.skip_fill:
+        argv += ["--skip-fill", c]
+    for c in args.skip_class:
+        argv += ["--skip-class", c]
+    if args.run:
+        argv += ["--run"]
+    return svg.main(argv)
+
+
+def cmd_ssh(args):
+    apply_conn(args)
+    return subprocess.run([SSH] + args.remote).returncode
+
+
+def build_parser():
+    p = argparse.ArgumentParser(
+        prog="rmk", description="Drive a reMarkable 2 over USB SSH.")
+    p.add_argument("--version", action="version", version="rmk " + VERSION)
+    p.add_argument("--host", help="SSH target (default root@10.11.99.1)")
+    p.add_argument("--key", help="SSH identity file")
+    p.add_argument("--timeout", help="connect timeout, seconds (1..30)")
+    sub = p.add_subparsers(dest="cmd", required=True, metavar="<command>")
+
+    t = sub.add_parser("tap", help="finger tap at screen pixels")
+    t.add_argument("x", type=px, help="0..1403, left to right")
+    t.add_argument("y", type=py, help="0..1871, top to bottom")
+    t.set_defaults(func=cmd_tap)
+
+    s = sub.add_parser("swipe", help="finger swipe, natural profile")
+    s.add_argument("x1", type=px)
+    s.add_argument("y1", type=py)
+    s.add_argument("x2", type=px)
+    s.add_argument("y2", type=py)
+    s.add_argument("--steps", type=int, default=24)
+    s.add_argument("--step-ms", type=int, default=12)
+    s.set_defaults(func=cmd_swipe)
+
+    h = sub.add_parser("shot", help="screenshot, read-only")
+    h.add_argument("--out", default="screen.png")
+    h.add_argument("--raw", default=None)
+    h.add_argument("--force", action="store_true")
+    h.add_argument("--dry-run", action="store_true",
+                   help="check the SSH path without capturing")
+    h.set_defaults(func=cmd_shot)
+
+    d = sub.add_parser("draw", help="draw SVG line art with the pen")
+    d.add_argument("file", help="SVG file to draw")
+    d.add_argument("--box", nargs=4, type=int, default=None,
+                   metavar=("X", "Y", "W", "H"))
+    d.add_argument("--speed", type=int, choices=range(1, 6), default=2,
+                   help="1 careful .. 5 fast (default 2, tracing pace)")
+    d.add_argument("--press", default=None, metavar="A[:B]")
+    d.add_argument("--skip-fill", action="append", default=[],
+                   metavar="COLOR")
+    d.add_argument("--skip-class", action="append", default=[],
+                   metavar="NAME")
+    d.add_argument("--run", action="store_true",
+                   help="draw on the tablet (default prints strokes)")
+    d.set_defaults(func=cmd_draw)
+    e = sub.add_parser("ssh", help="raw command on the tablet")
+    e.add_argument("remote", nargs=argparse.REMAINDER,
+                   help="command after --, e.g. rmk ssh -- true")
+    e.set_defaults(func=cmd_ssh)
+    return p
+
+
+def main(argv=None):
+    args = build_parser().parse_args(argv)
+    if args.cmd == "ssh":
+        remote = list(args.remote)
+        if remote[:1] == ["--"]:
+            remote = remote[1:]
+        if not remote:
+            return die("ssh needs a command: rmk ssh -- true")
+        args.remote = remote
+    return args.func(args)
+if __name__ == "__main__":
+    sys.exit(main())
