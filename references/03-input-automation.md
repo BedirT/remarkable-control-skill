@@ -229,6 +229,9 @@ py = raw_y * 1872 // y_max   # maxima from EVIOCGABS / evtest caps
     `Q` quits; every stroke acked in the log as `S ok`). Proven
     live 2026-09-18: flat ladder 500/1500/2500/3800 shows four
     distinct weights plus a 200→4000 swell on ballpoint.
+    Speed does not shade: 0.6 s vs 1.8 s vs 4.0 s strokes at
+    pressure 2500 drew pixel-identical weights (med/slow exactly
+    uniform; fast ~2% lighter at one column).
     Transient `pen`/`penraw`/`penpoly` nodes never reach the
     app — protocol spares only.
  3. Screen→digitizer mapping is digX = (1871−y)×11.199,
