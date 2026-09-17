@@ -201,7 +201,10 @@ py = raw_y * 1872 // y_max   # maxima from EVIOCGABS / evtest caps
  ```
 
  Live ink path is the `pend` daemon (§5b): one held pen node,
- strokes via `/tmp/pen.fifo`, SVG via `scripts/rm-svg.py --run`.
+ strokes via `/tmp/pen.fifo`, SVG via `scripts/rm-svg.py --run`
+ (`--skip-class/--skip-fill` drops background silhouettes — filled
+ shapes draw as outlines, so skip invisible fills or their contours
+ tangle the drawing; proven on a real logo, outline-faithful).
  (`pen`/`penraw`/`penpoly` one-shots still exist as protocol
  spares; the app never reads them.)
  Power control headless: `systemctl suspend` over SSH instead.

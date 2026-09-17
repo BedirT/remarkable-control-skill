@@ -10,6 +10,7 @@ stderr warning.
 
 Usage:
     python3 scripts/rm-svg.py drawing.svg [--box X Y W H] [--press A[:B]]
+    [--skip-class NAME] [--skip-fill COLOR]
     python3 scripts/rm-svg.py drawing.svg --run [--box ...] [--press ...]
 
 --run feeds each stroke to the `pend` daemon's /tmp/pen.fifo over the
@@ -216,14 +217,56 @@ def stroke_cmds(sub, proj, press0, press1, flip_y=False):
 
 
 
-def shapes(root):
-    """Yield point-subpaths from path/polyline/polygon elements."""
+def class_fills(root):
+    """Map CSS class -> fill value from <style> blocks (flat regex)."""
+    fills = {}
+    for el in root.iter():
+        if el.tag.split("}")[-1] == "style" and el.text:
+            for m in re.finditer(r"\.([\w-]+)\s*\{[^}]*?fill\s*:\s*([^;}]+)",
+                                 el.text):
+                fills[m.group(1)] = m.group(2).strip().lower()
+    return fills
+
+
+def shape_fill(el, class_fills):
+    """Resolved fill for a shape: direct attr, else class lookup."""
+    f = el.get("fill")
+    if f:
+        return f.strip().lower()
+    for c in el.get("class", "").split():
+        if c in class_fills:
+            return class_fills[c]
+    return ""
+
+
+def shapes(root, skip=()):
+    """Yield point-subpaths from path/polyline/polygon elements.
+
+    Shapes whose class or resolved fill is in `skip` are dropped
+    (background silhouettes tangle line art with outlines that do
+    not exist in the drawing). Normalizes #fff-style values.
+    """
+    fills = class_fills(root)
+    skip = {s.strip().lower().lstrip("#") for s in skip}
+
+    def norm(v):
+        v = v.strip().lower().lstrip("#")
+        return {"ffffff": "fff", "white": "fff"}.get(v, v)
+
+    skip = {norm(s) for s in skip}
     for el in root.iter():
         tag = el.tag.split("}")[-1]
+        if tag not in ("path", "polyline", "polygon"):
+            continue
+        if el.get("class", "").strip().lower() in skip:
+            continue
+        if norm(shape_fill(el, fills)) in skip:
+            continue
         if tag == "path" and el.get("d"):
             yield from parse_path(el.get("d"))
         elif tag in ("polyline", "polygon"):
-            pts = re.findall(r"-?\d*\.?\d+", el.get("points", ""))
+            pts = re.findall(r"[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?",
+                             el.get("points", ""))
             nums = [float(p) for p in pts]
             sub = list(zip(nums[::2], nums[1::2]))
             if tag == "polygon" and sub:
@@ -240,6 +283,7 @@ def main(argv):
     path = argv[0]
     box = [150, 200, SCREEN_W - 300, SCREEN_H - 400]
     press0, press1, run, flip_y = 1500, 1500, False, False
+    skip = []
     i = 1
     while i < len(argv):
         if argv[i] == "--box":
@@ -255,7 +299,9 @@ def main(argv):
             i += 1
         elif argv[i] == "--flip-y":
             flip_y = True
-            i += 1
+        elif argv[i] in ("--skip-class", "--skip-fill"):
+            skip.append(argv[i + 1])
+            i += 2
         else:
             i += 1
     root = ET.parse(path).getroot()
@@ -267,7 +313,7 @@ def main(argv):
         h = float(root.get("height", SCREEN_H).rstrip("px"))
         viewbox = (0.0, 0.0, w, h)
     proj = fit(viewbox, box)
-    subs = list(shapes(root))
+    subs = list(shapes(root, skip))
     if not subs:
         print("no drawable paths found", file=sys.stderr)
         return 1

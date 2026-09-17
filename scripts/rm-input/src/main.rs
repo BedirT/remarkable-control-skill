@@ -634,9 +634,10 @@ fn pen_stroke_multi(fd: RawFd, pts: &[(i32, i32)], steps: i32, step_ms: u64, p0:
         let (ux, uy) = if len > 0.0 { (dx as f64 / len, dy as f64 / len) } else { (1.0, 0.0) };
         // Glide must touchdown on canvas (toolbar eats x<~135 screen,
         // i.e. device Y<1512): shorten the lead to fit, keep 60 frames.
-        // Cap: 60 motion frames over ~27px converges the filter (proven:
-        // a 15px fit worked); longer just draws stray hairline.
-        let mut lead: f64 = 300.0;
+        // Cap: 60 motion frames over ~15px converges the filter (proven:
+        // a 15px fit worked with zero jog dips); longer just draws a
+        // stray hairline past the stroke start (visible dirt on drawings).
+        let mut lead: f64 = 170.0;
         if ux > 0.0 {
             lead = lead.min((pts[0].0 - 0) as f64 / ux);
         } else if ux < 0.0 {
