@@ -6,57 +6,58 @@
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license: MIT" />
 </p>
 
-An agent skill for controlling a reMarkable 2 tablet. It was born out of
-my own experiments and wanting some extra tooling on my reMarkable.
+<p align="center">
+Agent control for the reMarkable 2 over plain USB SSH.
+One CLI for hands, one skill for brains.
+</p>
 
-My motto for agentic development: your harness is only as strong as the
-least observable end state you have. And the reMarkable 2 exposes no
-screen recording of any kind. The only solution I could find out of the
-box was ScreenShare, which needs a manual connection first and then lets
-the agent work. Useless to me, because the development I was doing
-restarts the tablet quite often and needs hands-off test suites.
+Two things live here, and they serve each other:
 
-There was no API for any of this, so I reverse-engineered the whole path
-under my own guidance, with my AI agents doing the heavy lifting (Codex
-Astra 6 and Meta Spark 1.3): how the screen is composed, where the
-pixels live, and how to pull them out over plain SSH with nothing installed
-on the tablet.
+- **`rm2ctrl`** — a small command-line tool that drives the tablet:
+  screenshot, tap, swipe, pen drawing, raw SSH. Anything — human or
+  agent — can run it. Full reference in [CLI.md](CLI.md).
+- **The skill** ([SKILL.md](SKILL.md)) — teaches an agent *when* to run
+  what: how the screens connect, what to check after each step, and
+  the safety rules. The CLI is the hands; the skill is the brain.
 
-So I did the investigation by hand and built this skill: a complete suite
-of tools and guidance for agents to reach the reMarkable 2 screen and all
-the tooling around it, without needing any external search, screen capture
-included. It also bakes in the working structures I use, so the
-agent knows what works best, how to interact with the tablet, and how to
-develop for it.
+## The CLI in 30 seconds
 
-## Why this exists
+```sh
+git clone https://github.com/BedirT/remarkable-control-skill
+cd remarkable-control-skill
+export PATH="$PWD:$PATH"
 
-Nothing on the tablet helps an agent. No screenshot API that survives, no
-UI automation layer, no screen recording. What is actually there:
+rm2ctrl shot --out screen.png   # see the tablet (~8 s)
+rm2ctrl tap 700 936             # tap center
+rm2ctrl shot --out verify.png   # prove the tap landed
+```
 
-- **Display**: 1404x1872 monochrome e-ink with 100-450 ms render latency.
-State can only be proven by capture, never assumed. The only stock way out
-(ScreenShare) needs a manual tap and dies on restart.
- - **Input**: kernel evdev nodes, not UI APIs. A tiny static helper
-   (`scripts/rm-input/`, copied to the tablet's `/tmp`) taps, swipes,
-   and draws real pen strokes with screen coordinates (a `pend`
-   daemon takes strokes from a FIFO; `scripts/rm-svg.py` draws SVG
-   line art); keys are not done yet.
-- **Platform**: one Qt 6 app (xochitl) owns the composed screen. It
-restarts without warning, and every firmware moves its internals, so all
-addresses are pinned per build and re-verified on every run.
+First tablet use also needs the tiny input helper on the device:
 
-This skill grounds each of those planes (access, display, input, files,
-screen map, tooling, loop discipline) in on-device paths that were verified
-live, so agents act deterministically instead of guessing.
+```sh
+scp scripts/rm-input/rm-input root@10.11.99.1:/tmp/rm-input
+```
 
-Target is the **reMarkable 2**. Paper Pro differences (Developer Mode,
-display stack, CPU arch) are flagged where they matter and never mixed
-into rM2 procedures.
+| Command | What it does |
+|---|---|
+| `rm2ctrl shot [--out F]` | Screenshot, read-only. No taps, no refresh, no setup on the tablet. |
+| `rm2ctrl tap X Y` | Finger tap at screen pixels (1404×1872). Bad coords rejected before anything runs. |
+| `rm2ctrl swipe X1 Y1 X2 Y2` | Finger swipe with a natural, finger-like profile. |
+| `rm2ctrl draw FILE.svg --run` | Draws SVG line art with the pen, one pen-down per shape. `--speed 1-5` sets the pace (default 2, careful tracing). Without `--run` it just prints the strokes. |
+| `rm2ctrl ssh -- <cmd>` | Escape hatch: a raw command on the tablet. |
 
-## Install
+```sh
+rm2ctrl draw logo.svg --run --box 200 500 1000 700 --skip-fill fff
+```
 
-Copy-paste to your agent:
+Connection flags work on every command:
+`--host`, `--key`, `--timeout` (defaults: USB `root@10.11.99.1`,
+`~/.ssh/id_rsa_remarkable`, 5 s). Exit codes: 0 ok, 1 device
+failure, 2 bad arguments (nothing touched).
+
+## The skill in 30 seconds
+
+Paste this to your agent:
 
 ```text
 Install the reMarkable 2 skill from https://github.com/BedirT/remarkable-control-skill:
@@ -64,66 +65,44 @@ clone it, put its `rm2ctrl` command on your PATH, follow the README quickstart
 to connect over USB SSH, and take a first screen capture to prove the loop works.
 ```
 
-## Quickstart
+The skill routes every task through one loop: **observe** (`rm2ctrl
+shot`), **act** exactly once (`rm2ctrl tap`/`swipe`/`draw`), **verify**
+with another screenshot. E-ink needs ~1 s to settle; state is proven
+by capture, never assumed. Start at [SKILL.md](SKILL.md): it routes to
+seven references (access, display, input, files, screen map, tooling,
+loop discipline) and states the safety rules — never force a refresh,
+stop xochitl before writing its files, fail fast, never prompt.
 
-1. Connect over USB and prove key auth (details: `references/01-access-auth.md`):
+## Why this exists
 
-   ```sh
-   scripts/rm-ssh.sh true   # expect exit 0; user root, port 22
-   # raw equivalent (BatchMode + ConnectTimeout: never prompt, fail fast):
-   # ssh -n -o BatchMode=yes -o ConnectTimeout=5 -o PasswordAuthentication=no \
-   #   -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa root@10.11.99.1 true
-   ```
+Nothing on the tablet helps an agent. No screenshot API that survives,
+no UI automation layer, no screen recording. The only stock way out
+(ScreenShare) needs a manual tap and dies on restart. So the whole
+path was reverse-engineered: where xochitl keeps its composed page and
+how to pull it over plain SSH with nothing installed, plus a tiny
+static helper that taps, swipes, and draws real pen strokes through
+kernel input devices. Every address is pinned per firmware build and
+re-verified on every run.
 
-2. Capture the screen (reverse-engineered, zero tablet setup) (`references/02-display-screenshot.md` §2):
-
-   ```sh
-   rm2ctrl shot --out screen.png   # ~8 s, writes screen.png + screen.raw
-   # Reads xochitl's own composed page (1404x1872 RGB32 QImage) over USB SSH.
-   # No tablet-side setup, taps, refresh, or uploads. Pre/post rechecks abort on change.
-   # Timing (3 runs, fw 20260827113527): 8.3 s total: snapshot+hash 1.3 s, metadata+recheck+probe 3.7 s, transfer 1.0 s, PNG 0.1 s, final recheck 2.3 s.
-   # Strict mode: stop on ABORT (02 §3); ScreenShare/photo only if the user allows a human step.
-   # Why the checks: raw reads fail silent, so each check turns a wrong read into a loud abort.
-   # Hash gate (wrong build = wrong addresses), object-type and shape checks (is it really the
-   # screen image?), mapping check (/dev/fb0 looks valid but is stale), pre/post rechecks (the app
-   # has restarted mid-run before: a torn frame is discarded, never saved), byte cap and deadline
-   # (a bug can never dump forever), safe saving (a failed run never overwrites the last good shot).
- 3. Act exactly once: one file op (`references/04-files-content.md`),
-   one tap/swipe via `/tmp/rm-input`, or one pen stroke / SVG drawing
-   (`references/03-input-automation.md` §5, §5b–§5d):
-```sh
-scp scripts/rm-input/rm-input root@10.11.99.1:/tmp/rm-input   # first use only (runs on your machine, not via rm2ctrl)
-rm2ctrl tap 700 936                # tap center
-rm2ctrl draw drawing.svg --run     # draw line art
-rm2ctrl shot --out verify.png      # prove it
-```
- See `references/07-autonomy-loop.md` for the full loop discipline.
-
-Start every task at [SKILL.md](SKILL.md): it routes to the right
-reference and states the safety rules.
+Target is the **reMarkable 2**. Paper Pro differences are flagged
+where they matter and never mixed into rM2 procedures.
 
 ## Structure
 
 ```text
-SKILL.md                        thin router (<100 lines): connect, loop, safety
-references/
-  01-access-auth.md             USB/WiFi SSH, keys, password paths, Web UI, pairing avoidance
-  02-display-screenshot.md      panel specs, capture method (§2), failure fallback (§3), safety, Paper Pro deltas
-   03-input-automation.md        tap/swipe/pen via /tmp/rm-input helper (§5, §5b–§5d); keys not implemented
-   04-files-content.md           xochitl tree, USB endpoints, rmapi, cloud / rmfakecloud
-   05-ui-ux-map.md               screen hierarchy, gestures, 13-icon toolbar, states, e-ink design rules
-   06-tooling-ecosystem.md       capture / input / file tool comparison with repo links + status
-   07-autonomy-loop.md           zero-interruption observe-act-verify discipline, timeouts, recovery
- rm2ctrl + CLI.md                  control CLI (tap/swipe/shot/draw/ssh) + its command reference
- tests/test_rm2ctrl.py         host-only CLI tests (no tablet needed)
+rm2ctrl + CLI.md                control CLI (tap/swipe/shot/draw/ssh) + command reference
+SKILL.md                        thin router: connect, loop, safety
+references/                     01 access & auth, 02 display & screenshot, 03 input,
+                                04 files & content, 05 UI/UX map, 06 tooling, 07 autonomy loop
+scripts/                        rm-capture.py, rm-svg.py, rm-ssh.sh, rm-input/ (Rust helper)
+tests/                          host-only suite, incl. test_rm2ctrl.py (no tablet needed)
 ```
 
 ## Contributing
 
 Keep SKILL.md thin: detail belongs in `references/`, runnable code in
-`scripts/`. Ground every command and path in on-device evidence; mark
-anything unverified `[INFERENCE]` and flag Paper Pro deltas instead of
-mixing them. See [SKILL.md](SKILL.md) safety rules before adding
-anything that writes to the display pipeline or the xochitl tree.
-
-
+`scripts/` behind an `rm2ctrl` subcommand. Ground every command and
+path in on-device evidence; mark anything unverified `[INFERENCE]`
+and flag Paper Pro deltas instead of mixing them. See [SKILL.md](SKILL.md)
+safety rules before adding anything that writes to the display
+pipeline or the xochitl tree.
