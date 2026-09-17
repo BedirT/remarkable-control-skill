@@ -389,6 +389,55 @@ fn emit(fd: RawFd, ty: u16, code: u16, value: i32) {
 fn sync(fd: RawFd) {
     emit(fd, EV_SYN, SYN_REPORT, 0);
 }
+// One input frame, one timestamp, one write: every event in the frame
+// shares a timestamp and lands in a single packet (modes 1+).
+fn emit_frame(fd: RawFd, evs: &[(u16, u16, i32)]) {
+    let mut tv: libc::timeval = unsafe { zeroed() };
+    unsafe { libc::gettimeofday(&mut tv, std::ptr::null_mut()) };
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct Ev {
+        tv: libc::timeval,
+        ty: u16,
+        code: u16,
+        value: i32,
+    }
+    let frame: Vec<Ev> = evs.iter().map(|&(ty, code, value)| Ev { tv, ty, code, value }).collect();
+    let p = frame.as_ptr() as *const u8;
+    let buf = unsafe { std::slice::from_raw_parts(p, frame.len() * std::mem::size_of::<Ev>()) };
+    let mut off = 0;
+    while off < buf.len() {
+        let n = unsafe { libc::write(fd, buf[off..].as_ptr() as *const _, (buf.len() - off) as usize) };
+        if n <= 0 {
+            die("short write to /dev/uinput");
+        }
+        off += n as usize;
+    }
+}
+
+fn now_mono() -> libc::timespec {
+    let mut ts: libc::timespec = unsafe { zeroed() };
+    unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut ts) };
+    ts
+}
+
+// Sleep until t0 + k*period_ms (absolute cadence: no drift pile-up).
+// t0 stays fixed for the whole stroke; overruns skip the nap.
+fn sleep_cadence(t0: &libc::timespec, k: i64, period_ms: u64) {
+    let total_ms = k * period_ms as i64;
+    let mut target = libc::timespec {
+        tv_sec: t0.tv_sec + (total_ms / 1000) as libc::time_t,
+        tv_nsec: t0.tv_nsec + (((total_ms % 1000) * 1_000_000) as libc::c_long),
+    };
+    if target.tv_nsec >= 1_000_000_000 {
+        target.tv_sec += 1;
+        target.tv_nsec -= 1_000_000_000;
+    }
+    let now = now_mono();
+    if now.tv_sec < target.tv_sec || (now.tv_sec == target.tv_sec && now.tv_nsec < target.tv_nsec) {
+        unsafe { libc::clock_nanosleep(libc::CLOCK_MONOTONIC, libc::TIMER_ABSTIME, &target, std::ptr::null_mut()) };
+    }
+}
 
 fn msleep(ms: u64) {
     let ts = libc::timespec {
@@ -560,14 +609,86 @@ fn pen_stroke(fd: RawFd, x1: i32, y1: i32, x2: i32, y2: i32, steps: i32, step_ms
 // Multi-point stroke in DEVICE coords: one hover, one contact pass
 // through every point, one lift. Steps split across segments
 // proportional to segment length (min 1 step per segment).
-fn pen_stroke_multi(fd: RawFd, pts: &[(i32, i32)], steps: i32, step_ms: u64, p0: i32, p1: i32) {
+// Emission mode: 0 = legacy (one write per event, relative naps);
+// 1 = packed frame + absolute cadence at step_ms; 2 = same at 5 ms;
+// 3 = mode 1 plus micro-tremor (sub-pixel dither like a real hand).
+fn pen_stroke_multi(fd: RawFd, pts: &[(i32, i32)], steps: i32, step_ms: u64, p0: i32, p1: i32, mode: i32) {
     emit(fd, EV_KEY, BTN_TOOL_PEN, 1);
     emit(fd, EV_ABS, ABS_X, pts[0].0);
     emit(fd, EV_ABS, ABS_Y, pts[0].1);
     emit(fd, EV_ABS, ABS_DISTANCE, 86);
     sync(fd);
     msleep(100);
-    // (no lone TOUCH frame: it joins the first contact frame below)
+    // Warmup: glide in along the initial tangent for ~60 contact frames
+    // at minimum pressure (near-invisible) with TOUCH joining the very
+    // first of them. Downstream stroke smoothing converges during this
+    // glide, so the visible sweep starts without a startup jog.
+    // (Measured: un-warmed strokes jog ~45 frames in on every tool.)
+    let period = if mode == 2 { 5 } else { step_ms };
+    let mut tick: i64 = 0;
+    let t0 = now_mono();
+    {
+        let dx = pts[1].0 - pts[0].0;
+        let dy = pts[1].1 - pts[0].1;
+        let len = ((dx as i64 * dx as i64 + dy as i64 * dy as i64) as f64).sqrt();
+        let (ux, uy) = if len > 0.0 { (dx as f64 / len, dy as f64 / len) } else { (1.0, 0.0) };
+        // Glide must touchdown on canvas (toolbar eats x<~135 screen,
+        // i.e. device Y<1512): shorten the lead to fit, keep 60 frames.
+        // Cap: 60 motion frames over ~27px converges the filter (proven:
+        // a 15px fit worked); longer just draws stray hairline.
+        let mut lead: f64 = 300.0;
+        if ux > 0.0 {
+            lead = lead.min((pts[0].0 - 0) as f64 / ux);
+        } else if ux < 0.0 {
+            lead = lead.min((pts[0].0 - PEN_X_MAX) as f64 / ux);
+        }
+        if uy > 0.0 {
+            lead = lead.min((pts[0].1 - 1512) as f64 / uy);
+        } else if uy < 0.0 {
+            lead = lead.min((pts[0].1 - PEN_Y_MAX) as f64 / uy);
+        }
+        if lead < 0.0 {
+            lead = 0.0;
+        }
+        for k in (1..=60).rev() {
+            let wx = (pts[0].0 as f64 - ux * lead * k as f64 / 60.0) as i32;
+            let wy = (pts[0].1 as f64 - uy * lead * k as f64 / 60.0) as i32;
+            let wx = wx.clamp(0, PEN_X_MAX);
+            let wy = wy.clamp(0, PEN_Y_MAX);
+            tick += 1;
+            if mode == 0 {
+                if k == 60 {
+                    emit(fd, EV_KEY, BTN_TOUCH, 1);
+                }
+                emit(fd, EV_ABS, ABS_X, wx);
+                emit(fd, EV_ABS, ABS_Y, wy);
+                emit(fd, EV_ABS, ABS_PRESSURE, 1);
+                emit(fd, EV_ABS, ABS_DISTANCE, 0);
+                emit(fd, EV_ABS, ABS_TILT_X, 0);
+                emit(fd, EV_ABS, ABS_TILT_Y, 0);
+                sync(fd);
+                msleep(step_ms);
+            } else {
+                if k == 60 {
+                    emit_frame(fd, &[
+                        (EV_KEY, BTN_TOUCH, 1),
+                        (EV_ABS, ABS_X, wx), (EV_ABS, ABS_Y, wy),
+                        (EV_ABS, ABS_PRESSURE, 1), (EV_ABS, ABS_DISTANCE, 0),
+                        (EV_ABS, ABS_TILT_X, 0), (EV_ABS, ABS_TILT_Y, 0),
+                        (EV_SYN, SYN_REPORT, 0),
+                    ]);
+                } else {
+                    emit_frame(fd, &[
+                        (EV_ABS, ABS_X, wx), (EV_ABS, ABS_Y, wy),
+                        (EV_ABS, ABS_PRESSURE, 1), (EV_ABS, ABS_DISTANCE, 0),
+                        (EV_ABS, ABS_TILT_X, 0), (EV_ABS, ABS_TILT_Y, 0),
+                        (EV_SYN, SYN_REPORT, 0),
+                    ]);
+                }
+                sleep_cadence(&t0, tick, period);
+            }
+        }
+    }
     let mut seg = Vec::new();
     let mut pre = Vec::new();
     let mut total: i64 = 0;
@@ -577,6 +698,14 @@ fn pen_stroke_multi(fd: RawFd, pts: &[(i32, i32)], steps: i32, step_ms: u64, p0:
         pre.push(total);
         total += l;
     }
+    // Deterministic micro-tremor (mode 3): ±2 device units (~0.2 px),
+    // like a real hand's shake. Keeps every frame's values unique so
+    // downstream smoothing never sees a degenerate perfect ramp.
+    let mut lcg: u32 = 0x12345678;
+    let mut tremor = |amp: i32| {
+        lcg = lcg.wrapping_mul(1664525).wrapping_add(1013904223);
+        ((lcg >> 16) as i32 % (2 * amp + 1)) - amp
+    };
     for (si, w) in pts.windows(2).enumerate() {
         let n = if total > 0 {
             std::cmp::max(1, (seg[si] * steps as i64 / total) as i32)
@@ -584,17 +713,32 @@ fn pen_stroke_multi(fd: RawFd, pts: &[(i32, i32)], steps: i32, step_ms: u64, p0:
             1
         };
         for i in 0..=n {
-            if si == 0 && i == 0 {
-                emit(fd, EV_KEY, BTN_TOUCH, 1);
+            let mut x = w[0].0 + (w[1].0 - w[0].0) * i / n;
+            let mut y = w[0].1 + (w[1].1 - w[0].1) * i / n;
+            if mode == 3 {
+                x += tremor(2);
+                y += tremor(2);
             }
-            emit(fd, EV_ABS, ABS_X, w[0].0 + (w[1].0 - w[0].0) * i / n);
-            emit(fd, EV_ABS, ABS_Y, w[0].1 + (w[1].1 - w[0].1) * i / n);
-            emit(fd, EV_ABS, ABS_PRESSURE, lerp_press(p0, p1, pre[si] + seg[si] * i as i64 / n as i64, total));
-            emit(fd, EV_ABS, ABS_DISTANCE, 0);
-            emit(fd, EV_ABS, ABS_TILT_X, 0);
-            emit(fd, EV_ABS, ABS_TILT_Y, 0);
-            sync(fd);
-            msleep(step_ms);
+            let pr = lerp_press(p0, p1, pre[si] + seg[si] * i as i64 / n as i64, total);
+            if mode == 0 {
+                emit(fd, EV_ABS, ABS_X, x);
+                emit(fd, EV_ABS, ABS_Y, y);
+                emit(fd, EV_ABS, ABS_PRESSURE, pr);
+                emit(fd, EV_ABS, ABS_DISTANCE, 0);
+                emit(fd, EV_ABS, ABS_TILT_X, 0);
+                emit(fd, EV_ABS, ABS_TILT_Y, 0);
+                sync(fd);
+                msleep(step_ms);
+            } else {
+                tick += 1;
+                emit_frame(fd, &[
+                    (EV_ABS, ABS_X, x), (EV_ABS, ABS_Y, y),
+                    (EV_ABS, ABS_PRESSURE, pr), (EV_ABS, ABS_DISTANCE, 0),
+                    (EV_ABS, ABS_TILT_X, 0), (EV_ABS, ABS_TILT_Y, 0),
+                    (EV_SYN, SYN_REPORT, 0),
+                ]);
+                sleep_cadence(&t0, tick, period);
+            }
         }
     }
     emit(fd, EV_ABS, ABS_PRESSURE, 0);
@@ -774,13 +918,15 @@ fn main() {
         // xochitl opens this node (via XOCHITL_DIGITIZER_PATH) and
         // transient per-stroke nodes never reach it — so all ink
         // must flow through here: `echo "S ..." > /tmp/pen.fifo`.
-        // Line format: S STEPS STEP_MS PRESS X1 Y1 [X2 Y2 ...]
-        // (screen coords); Q quits. One line per writer-open.
+        // Line format: S STEPS STEP_MS P0 P1 X1 Y1 [X2 Y2 ...]
+        // (screen coords, pressure ramps P0->P1); M <0|1|2> switches
+        // the emission mode at runtime; Q quits. One line per writer-open.
         let fifo = "/tmp/pen.fifo";
         let c = CString::new(fifo).unwrap();
         unsafe { libc::mkfifo(c.as_ptr(), 0o600) };
         let fd = create_pen_device();
         println!("pend ready {}", fifo);
+        let mut mode = 0;
         let mut buf = [0u8; 4096];
         loop {
             let rfd = open(fifo, libc::O_RDONLY);
@@ -809,7 +955,13 @@ fn main() {
                     break;
                 }
                 let p: Vec<&str> = t.split_whitespace().collect();
-                if p.len() < 9 || p[0] != "S" || (p.len() - 5) % 2 != 0 {
+                if p.len() == 2 && p[0] == "M" {
+                    if let Ok(m) = p[1].parse::<i32>() {
+                        if m >= 0 && m <= 3 {
+                            mode = m;
+                            println!("M ok mode={}", mode);
+                        }
+                    }
                     continue;
                 }
                 let num = |i: usize| p[i].parse::<i32>().unwrap_or(-1);
@@ -834,8 +986,8 @@ fn main() {
                     pts.push(map_pen(sx, sy));
                 }
                 if ok && pts.len() >= 2 {
-                    pen_stroke_multi(fd, &pts, steps, step_ms as u64, p0, p1);
-                    println!("S ok pts={} p={}-{}", pts.len(), p0, p1);
+                    pen_stroke_multi(fd, &pts, steps, step_ms as u64, p0, p1, mode);
+                    println!("S ok pts={} p={}-{} mode={}", pts.len(), p0, p1, mode);
                 }
             }
             if quit {
@@ -867,7 +1019,7 @@ fn main() {
             pts.push(map_pen(sx, sy));
         }
         let fd = create_pen_device();
-        pen_stroke_multi(fd, &pts, steps, step_ms, press, press);
+        pen_stroke_multi(fd, &pts, steps, step_ms, press, press, 0);
         destroy(fd);
         println!("ok penpoly {} pts steps={}", pts.len(), steps);
         return;

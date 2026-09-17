@@ -251,9 +251,50 @@ py = raw_y * 1872 // y_max   # maxima from EVIOCGABS / evtest caps
 
  Real-pen ground truth (passive `cat /dev/input/event1` while the
  owner draws): contact frame is TOUCH=1 + changed axes +
- PRESSURE jump (no ramp, ~2900) + DISTANCE 8→0; tilt sparse;
- 100–200 Hz; no MSC/STYLUS traffic.
+PRESSURE jump (no ramp, ~2900) + DISTANCE 8→0; tilt sparse;
+100–200 Hz; no MSC/STYLUS traffic.
 
+## 5c. Pen stroke quality: warmup glide (WORKING 2026-09-18)
+
+Un-warmed strokes jog ~45 frames in on every tool: the downstream
+smoothing filter converges late, kicking the line ~2 px sideways at
+~14% of the sweep (measured: column ink-dip 15-vs-85 at x225 of a
+150→700 line). Static dwell does NOT warm it (40 duplicate points:
+still jogged — the stack dedups motionless points) and neither does
+easing in (eased 217-frame line jogged at the same frame 13.6%).
+What works: a 60-frame pressure-1 glide along the initial tangent
+BEFORE the sweep, TOUCH joining its first frame. 60 motion frames
+converge the filter; the sweep then starts jog-free (jog sweep flat
+3/3 across all 20 columns of a 500 px line, wobble 0.5 px).
+Details: glide pressure 1 renders a faint hairline (1–2 px rows), so
+the lead is capped at 300 device units (~27 px) — proven sufficient
+(a 15 px fit also converged fully). The lead is shortened to fit the
+canvas: touchdown under the toolbar (screen x<~135, device Y<1512)
+is swallowed by the app and kills the WHOLE stroke (zero ink, acked
+normally — seen twice). Trail reads as a natural pen touchdown.
+The kernel delivers only CHANGED values per frame to readers
+(captured: constant X / pressure-1 appear once) — frame COUNT is
+what warms the filter, not value traffic.
+
+## 5d. Input device lifecycle (hard rule — silent strokes otherwise)
+
+The daemon's uinput node (`rm2-touch-inject`, currently
+`/dev/input/event3`) is DESTROYED when the daemon dies. xochitl
+holds it open but never re-opens: after any daemon kill it logs
+`evdevtouch: Could not read from input device (No such device)`
+and every later stroke is a silent no-op (emission acked, kernel
+stream well-formed, zero new pixels — 4 strokes lost to this
+2026-09-18). Taps keep working (one-shot finger nodes, hotplug
+is fine for finger) which masks the outage — pen does not recover.
+Recipe for every daemon redeploy: start daemon FIRST, then
+`reset-failed` + `restart xochitl`, verify `/proc/<pid>/fd` holds
+the new node AND no `Could not read` in `journalctl`, reopen the
+page, draw one smoke line and measure ink before trusting the path.
+Detection when strokes stop landing: `journalctl | grep
+"Could not read"` — if present, the device cycle above is the fix.
+Build note: file tooling writes future mtimes, cargo then calls
+the crate fresh when it is not — always `cargo clean -p rm-input`
+before the ARM build or you stage a stale binary.
 
 ## 6. xochitl coexistence
 
