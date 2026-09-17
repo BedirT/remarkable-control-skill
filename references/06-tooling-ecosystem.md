@@ -13,22 +13,14 @@ input / files), and mixing planes causes flakiness.
 
 | Tool | Repo | Transport | Reported perf | Status | Use for |
 |---|---|---|---|---|---|
-| reStream (+ `restream.arm.static`) | https://github.com/rien/reStream | On-device Rust reader (fb / `:mem:`) → lz4 → SSH stdout, or raw TCP `nc :16789` with `-u` | Streaming video; pipe latency in the hundreds of ms (ffmpeg buffering + lz4 CPU); `-u` raises fps / lowers CPU `[INFERENCE ~5–15 fps USB]` | v1.5.0 lineage; fw branches for 3.7 / 3.24 / 3.27; Toltec + vellum packages (Toltec: OS <= 3.3.2); semi-active | Continuous interaction streams; `./reStream.sh -p` portrait, `-o cap.mp4` record, `-m` throughput check |
-| rmview — VNC-server backend | https://github.com/bordaigorl/rmview | RFB/VNC to rM-vnc-server `:5900` (libvncserver ZRLE, damage-tracked, REMARKABLE_ENCODING 5000; optional SSH tunnel) | Author-tested best of breed; negligible latency + smooth drawing over USB; WiFi + SSH tunnel stutters | Active; auto / screenshare / vncserver backends; ships `bin/rM2-vnc-server-standalone` | Interactive sessions on fw ≤ 2.8; live view + PNG save + pen tracking |
-| rmview — ScreenShare backend | https://github.com/bordaigorl/rmview | Official ScreenShare: TLS VNC `:5900` + UDP `:5901` timestamp broadcast; auth `sha256(ts + sha256(auth0-userid))`, userid from devicetoken JWT | Throttled by official stack `[INFERENCE ~5–10 fps]` | Active; **only path on fw ≥ 2.9** (compat table: VNC / rm2fb fail there) | Only forward-compatible capture choice; also the Paper Pro path |
-| rM-vnc-server (tablet server) | https://github.com/pl-semiotics/rM-vnc-server | libvncserver + damage tracking (rM1 `mxc_epdc_fb_damage`; rM2 libqsgepaper-snoop `LD_PRELOAD`) | Same as VNC row (server side) | Prebuilt releases; **rM2 broken on fw ≥ 2.9** — use ScreenShare there | Server half of the VNC path on old firmware |
-| rm2fb server / client / shim + xofb | https://github.com/ddvk/remarkable2-framebuffer | On-device IPC: `LD_PRELOAD librm2fb_server.so` into xochitl + `librm2fb_client.so` shim via shm (`/dev/shm/swtfb.*`, `/dev/shm/xofb` rgb565) + message queues; xofb hooks the QImage ctor | Not a streamer — enabler (N/A fps) | Beta; per-fw hardcoded addresses (`config.cpp` 2.4.0 → 2.15.x + `/etc/rm2fb.conf` override); Toltec package (Toltec: OS <= 3.3.2); new-fw support tracked in issue #18 | Making third-party display code work on rM2; prerequisite for libremarkable-on-rM2 |
-| libremarkable framebuffer | https://github.com/canselcik/libremarkable | On-device Rust: `mmap(/dev/fb0)` + `MXCFB_SEND_UPDATE` / `WAIT_FOR_UPDATE_COMPLETE` ioctls (rM1) or SwtfbClient (rM2, needs rm2fb server); `examples/screenshot.rs` dumps rgb565le → PNG | N/A (single-shot dump) | Active (MSRV 1.80); rM2 path needs Toltec display / rm2fb server | On-device native screenshots; writing custom on-tablet agents |
-| Official ScreenShare (in-box feature) | In-box firmware; driven via rmview backend | Same TLS-VNC as ScreenShare row | Same | In-box on current fw; only forward-compatible Paper Pro choice `[INFERENCE]` | Zero-install capture once started on the tablet (one manual tap) |
+| `scripts/rm-capture.py` (this repo) | references/02-display-screenshot.md §2 | xochitl's composed QImage (1404×1872 RGB32) → raw dd over `rm-ssh.sh` stdout → host PNG; pre/post rechecks | ~5 s per shot, ~16–30 SSH ops | Proven live 2026-09-16 on fw 20260827113527 | Headless single-shot capture with zero tablet setup; byte-exact repeats, tracks pen strokes |
+| Official ScreenShare (+ rmview backend) | In-box firmware; https://github.com/bordaigorl/rmview | TLS VNC `:5900` + UDP `:5901` | Start ScreenShare on the tablet first (one manual tap) | Second option when 02 §2 fails; Paper Pro path |
 
 Backend picker:
 
-- fw ≥ 2.9 or Paper Pro → ScreenShare backend (start ScreenShare on
-  the tablet first — the one manual step).
-- fw ≤ 2.8 → VNC-server or reStream.
-- rm2fb / VNC-server on ≥ 2.9 is a dead end.
-- USB-RNDIS (`10.11.99.1`) beats WiFi for every row; single-shot
-  `cat` + `ffmpeg` beats streaming for verify steps.
+- 2026 fw (20260827113527) → `scripts/rm-capture.py` (02 §2, no tablet step).
+- If it fails → stop on ABORT in strict mode (02 §3); ScreenShare/photo only if the user allows a human step.
+- USB (`10.11.99.1`) beats WiFi for every row.
 
 ## 2. Input injection
 
@@ -88,9 +80,7 @@ last-listed folder — list the target folder first), `GET
 
 ## 5. Recommended minimal kit (autonomy default)
 
-1. **Observe:** reStream single-shot or ScreenShare backend (by
-   firmware) → PNG → byte-size check (5 256 576 B for a 16-bit full
-   frame).
+1. **Observe:** `scripts/rm-capture.py` → PNG + 10 513 152 B raw (02 §2).
 2. **Act (bytes):** USB web UI (`curl` against `10.11.99.1`) or SSH +
    rsync against `/home/root/.local/share/remarkable/xochitl/`
    (stop xochitl before writing the tree, restart after).

@@ -23,7 +23,7 @@ step, screenshot-verify everything, fail fast and recover deterministically.
 ## 2. Preconditions (run once per session)
 
 Timeouts are intentional: 2 s for the fail-fast probe, 5 s default for
-bulk transfer. Both wrappers (`scripts/rm-ssh.sh` / `scripts/rm-screenshot.sh`) honor `RM_CONNECT_TIMEOUT` (integer 1..30, default 5) — the 2 s probe needs `RM_CONNECT_TIMEOUT=2` or raw ssh/config.
+bulk transfer. `scripts/rm-ssh.sh` honors `RM_CONNECT_TIMEOUT` (integer 1..30, default 5); `scripts/rm-capture.py` takes `--timeout` — the 2 s probe needs `--timeout 2` / `RM_CONNECT_TIMEOUT=2` or raw ssh/config.
 
 ```sh
 # key auth, no prompts, short timeouts, detached stdin
@@ -68,11 +68,9 @@ Then every autonomous command is `ssh remarkable …` / `scp … :
 
 ```
 ┌─────────────────────────────────────────────────┐
-│ OBSERVE: single-shot capture → PNG              │
-│   ssh root@10.11.99.1 "cat /dev/shm/swtfb.01"   │
-│     > fb.raw  (+ firmware matrix fallback,      │
-│     reStream.sh probe order — never hardcode    │
-│     one fb path) → ffmpeg → out.png             │
+│ OBSERVE: scripts/rm-capture.py → PNG+raw        │
+│   --out verify.png (+ screen.raw 10513152 B)     │
+│   (02 §2; on failure 02 §3)                      │
 │          │                                      │
 │ ACT (exactly one):                              │
 │   a) file op: curl POST /upload / GET           │
@@ -82,9 +80,8 @@ Then every autonomous command is `ssh remarkable …` / `scp … :
 │      pen stroke / KEY_POWER via the             │
 │      injector (12 ms frame interp)              │
 │          │                                      │
-│ VERIFY: fresh screenshot + byte check           │
-│   re-capture → PNG; expect 5 256 576 B          │
-│   for a 16-bit full frame; diff against        │
+│ VERIFY: re-capture → PNG + raw; expect          │
+│   10513152 B raw (02 §2); diff against          │
 │   the pre-action frame for the expected         │
 │   region change. Match → next step.             │
 │   Mismatch → §5 recovery, then re-observe.      │
@@ -94,25 +91,15 @@ Then every autonomous command is `ssh remarkable …` / `scp … :
 Concrete verify example:
 
 ```sh
-ssh -n root@10.11.99.1 "cat /dev/shm/swtfb.01" > fb.raw
-ls -l fb.raw  # expect 5256576 bytes (1404*1872*2, 16-bit path)
-ffmpeg -vcodec rawvideo -f rawvideo -pix_fmt rgb565le -s 1404x1872 \
-  -i fb.raw -vf "transpose=1" verify.png
+python3 scripts/rm-capture.py --out verify.png      # + verify.raw
+ls -l verify.raw  # expect 10513152 bytes (1404*1872*4, 32-bit path)
 ```
 
 Rules:
 
-- Always capture to a **file** (`-o cap.png/mp4`) and convert — never
-  `ffplay`-only in autonomy; there is no human watching. Wrapper note: re-running `scripts/rm-screenshot.sh` to the same path needs `--force` (default ffmpeg `-n` refuses to clobber).
-- Always `trap` cleanup: `kill $(pidof restream)` / close the injector
-  on exit.
-- Probe order for the framebuffer follows upstream `reStream.sh` (not
-  `scripts/`): test `[ -f /dev/shm/swtfb.01 ]`, read `update.conf` for the firmware
-  version, then select `fb_file / pix_fmt / size / transpose / skip`
-  from the matrix (skips 8 / 2629636 / 4705256 by era). Do not hardcode
-  one matrix row. `scripts/rm-screenshot.sh` implements the two
-  always-safe rows (swtfb.01 else fb0, rgb565le) in one SSH connection;
-  `:mem:` eras need the matrix or reStream/ScreenShare.
+- Always capture to a **file** — never `ffplay`-only in autonomy; there is no human watching. Re-running `scripts/rm-capture.py` to the same paths needs `--force`.
+- Always `trap` cleanup: close the injector / kill any viewer on exit.
+- Capture with `scripts/rm-capture.py --out verify.png` (02 §2); on failure see 02 §3.
 - For file uploads, `GET` the target folder listing FIRST — `POST
   /upload` lands in the last-listed folder (with `Origin:
   http://10.11.99.1` header).
@@ -143,7 +130,6 @@ Rules:
 | Need exclusive input for a critical section | xochitl holds all nodes open | Short `EVIOCGRAB` / `grab_context()` grab, or full `systemctl stop xochitl` (+ stop `genie` if installed), then start again |
 | Factory reset occurred | Keys wiped, password regenerated | Re-install keys + re-record password before continuing — full session bootstrap |
 | `put` flaky / sync mismatch | rmapi new-sync-protocol migration | Back up first; prefer USB/SSH path over cloud for authoritative moves |
-| `no framebuffer node` from `scripts/rm-screenshot.sh` (remote exit 3) | Firmware serves another layout — no swtfb.01/fb0 | Use the 02 pix_fmt matrix or reStream/ScreenShare; `error: ssh failed (rc=…)` instead means network/keys/host-key — different row |
 
 ## 6. Never-prompt rules
 
@@ -162,34 +148,28 @@ Rules:
 6. **Never confirm a destructive reformat** (EPUB reformat orphans
    strokes; delete/reset wipes data) without a fresh screenshot showing
    the exact warning dialog.
-7. **Never hardcode** `/dev/input/eventN` numbers, framebuffer
-   matrix rows, or WiFi IPs — enumerate (`EVIOCGNAME`, `reStream.sh`
-   probe, DHCP/GPLv3 page) at runtime.
+7. **Never hardcode** `/dev/input/eventN` numbers or WiFi IPs — enumerate (`EVIOCGNAME`, DHCP/GPLv3 page) at runtime.
 8. **Never leave two framebuffer consumers running** (xochitl +
-   oxide/rm2fb reader ⇒ lag + missed taps).
+   second reader ⇒ lag + missed taps).
 
 ## 7. Minimal session script (reference)
 
 ```sh
 #!/bin/sh
-# zero-interruption rM2 session skeleton (single-row simplification covers ONLY swtfb.01/fb0 rgb565le; :mem: eras need the 02 matrix or reStream/ScreenShare,
-# or just call scripts/rm-screenshot.sh which probes swtfb.01 else fb0)
+# zero-interruption rM2 session skeleton
 set -e
 SSH="ssh -n -o BatchMode=yes -o ConnectTimeout=2 -o PasswordAuthentication=no \
   -o PubkeyAcceptedKeyTypes=+ssh-rsa -o HostKeyAlgorithms=+ssh-rsa root@10.11.99.1"
 $SSH true                                           # fail-fast probe
 $SSH cat /sys/devices/soc0/machine                  # expect reMarkable 2.0
-$SSH "cat /dev/shm/swtfb.01" > before.raw           # observe
-ls -l before.raw                                    # byte check
+python3 scripts/rm-capture.py --out before.png        # observe (~5 s, + before.raw)
+ls -l before.raw                                    # expect 10513152 bytes
 # ... exactly one act (file op or single injection) ...
 sleep 1                                             # e-ink settle
-$SSH "cat /dev/shm/swtfb.01" > after.raw            # verify
-ls -l after.raw
-ffmpeg -vcodec rawvideo -f rawvideo -pix_fmt rgb565le -s 1404x1872 \
-  -i after.raw -vf "transpose=1" after.png
+python3 scripts/rm-capture.py --out after.png         # verify
+ls -l after.raw                                     # expect 10513152 bytes
 ```
 
-Firmware ≥ 2.9 note: capture rows that need VNC-server/rm2fb fail there
-— switch the OBSERVE step to the ScreenShare backend (start ScreenShare
-on the tablet first; the one sanctioned manual step). Paper Pro: same,
-plus Developer Mode + `rm-ssh-over-wlan on` prerequisites.
+Old capture rows don't apply on this firmware — the OBSERVE
+step above is `scripts/rm-capture.py` (02 §2, no tablet step). Paper Pro:
+ScreenShare + Developer Mode + `rm-ssh-over-wlan on` prerequisites.

@@ -30,16 +30,19 @@ into rM2 procedures.
    #   -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa root@10.11.99.1 true
    ```
 
-2. Capture the screen and check the bytes (`references/02-display-screenshot.md`):
+2. Capture the screen — reverse-engineered, zero tablet setup (`references/02-display-screenshot.md` §2):
 
    ```sh
-   scripts/rm-screenshot.sh --out screen.png
-   # raw equivalent (single-row simplification covers ONLY swtfb.01/fb0 rgb565le; :mem: eras need the 02 matrix or reStream/ScreenShare):
-   # ssh -n <same fail-fast flags> root@10.11.99.1 "cat /dev/shm/swtfb.01" > fb.raw
-   # ls -l fb.raw  # expect 5256576 bytes (1404*1872*2, 16-bit path)
-   # ffmpeg -vcodec rawvideo -f rawvideo -pix_fmt rgb565le -s 1404x1872 \
-   #   -i fb.raw -vf "transpose=1" screen.png
-   ```
+   scripts/rm-capture.py --out screen.png   # ~8 s, writes screen.png + screen.raw
+   # Reads xochitl's own composed page (1404x1872 RGB32 QImage) over USB SSH.
+   # No tablet-side setup, taps, refresh, or uploads. Pre/post rechecks abort on change.
+   # Timing (3 runs, fw 20260827113527): 8.3 s — snapshot+hash 1.3 s, metadata+recheck+probe 3.7 s, transfer 1.0 s, PNG 0.1 s, final recheck 2.3 s.
+   # Strict mode: stop on ABORT (02 §3); ScreenShare/photo only if the user allows a human step.
+   # Why the checks: raw reads fail silent, so each check turns a wrong read into a loud abort.
+   # Hash gate (wrong build = wrong addresses), object-type and shape checks (is it really the
+   # screen image?), mapping check (/dev/fb0 looks valid but is stale), pre/post rechecks (the app
+   # has restarted mid-run before — a torn frame is discarded, never saved), byte cap and deadline
+   # (a bug can never dump forever), safe saving (a failed run never overwrites the last good shot).
 
 3. Act exactly once — one file op (`references/04-files-content.md`)
    or one uinput tap/swipe/stroke (`references/03-input-automation.md`) —
@@ -55,13 +58,13 @@ reference and states the safety rules.
 SKILL.md                        thin router (<100 lines): connect, loop, safety
 references/
   01-access-auth.md             USB/WiFi SSH, keys, password paths, Web UI, pairing avoidance
-  02-display-screenshot.md      framebuffer specs, fb paths, pix_fmt matrix, capture commands
+  02-display-screenshot.md      panel specs, capture method (§2), failure fallback (§3), safety, Paper Pro deltas
   03-input-automation.md        tap/swipe scripts shipped; pen stroke + KEY_POWER via the 03 section-5 pattern (no dedicated script)
   04-files-content.md           xochitl tree, USB endpoints, rmapi, cloud / rmfakecloud
   05-ui-ux-map.md               screen hierarchy, gestures, 9-tool toolbar, states, e-ink design rules
   06-tooling-ecosystem.md       capture / input / file tool comparison with repo links + status
   07-autonomy-loop.md           zero-interruption observe-act-verify discipline, timeouts, recovery
-scripts/                        runnable sh/py helpers for the loop above
+scripts/                        rm-capture.py (screen capture), rm-ssh.sh (SSH wrapper), rm-tap.py / rm-swipe.py (input)
 ```
 
 ## Contributing

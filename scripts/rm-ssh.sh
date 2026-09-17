@@ -51,14 +51,17 @@ Options:
 Environment:
   RM_HOST      SSH target (default: root@10.11.99.1; WiFi IP also works
                after \`rm-ssh-over-wlan on\` on the tablet, OS > 3.20 only).
-  RM_KEY       Identity file (default: ~/.ssh/id_rsa_remarkable).
+  RM_KEY       Identity file (default: ~/.ssh/id_rsa_remarkable; a missing
+               default falls back to ssh key discovery, a missing explicit
+               RM_KEY is an error).
   RM_CONNECT_TIMEOUT
                ConnectTimeout seconds (default: 5; must be an integer 1..30).
 
 Notes:
-  - Dropbear offers legacy ssh-rsa host key: passes
-    HostKeyAlgorithms +ssh-rsa / PubkeyAcceptedKeyTypes +ssh-rsa.
-    ssh-rsa uses SHA-1 and is legacy; prefer ecdsa where firmware allows.
+- Newer Dropbear (e.g. 2025.88) offers an ed25519 host key, older ones
+  legacy ssh-rsa: passes HostKeyAlgorithms +ssh-rsa /
+  PubkeyAcceptedKeyTypes +ssh-rsa as harmless compatibility appends.
+  ssh-rsa uses SHA-1 and is legacy; prefer ecdsa where firmware allows.
   - ConnectTimeout (\$RM_CONNECT_TIMEOUT, default 5) + BatchMode=yes:
     no password prompts, fast failure.
   - Non-interactive: stdin is detached (ssh -n), so the remote command
@@ -176,11 +179,13 @@ while [ $# -gt 0 ]; do
 done
 if [ -n "${RM_KEY:-}" ]; then
   KEY="$RM_KEY"
+  KEY_EXPLICIT=1
 elif [ -z "${HOME:-}" ]; then
   echo "error: RM_KEY is not set and HOME is not set; set RM_KEY to your private key path" >&2
   exit 1
 else
   KEY="$HOME/.ssh/id_rsa_remarkable"
+  KEY_EXPLICIT=0
 fi
 # tr is load-bearing in validation below (control-character gates, -o
 # gate); fail with a clear cause instead of false rejections.
@@ -354,7 +359,19 @@ case "$_t" in
   *) echo "error: RM_CONNECT_TIMEOUT must be an integer 1..30 (got: $CONNECT_TIMEOUT)" >&2; exit 2 ;;
 esac
 
-SSH_BASE=(ssh -n -i "$KEY" -o BatchMode=yes -o ConnectTimeout="$CONNECT_TIMEOUT"
+# Identity selection: an explicit RM_KEY that is missing stays a hard
+# error (typo protection); a missing *default* file falls back to ssh's
+# own key discovery (default identities, agent) with a stderr note.
+KEY_ARGS=()
+if [ -f "$KEY" ] && [ -r "$KEY" ]; then
+  KEY_ARGS=(-i "$KEY")
+elif [ "${KEY_EXPLICIT:-0}" -eq 1 ]; then
+  echo "error: identity file not readable: $KEY (set RM_KEY)" >&2
+  exit 1
+else
+  echo "note: no key file at $KEY; letting ssh use default identities/agent (set RM_KEY to pin one)" >&2
+fi
+SSH_BASE=(ssh -n ${KEY_ARGS[@]+"${KEY_ARGS[@]}"} -o BatchMode=yes -o ConnectTimeout="$CONNECT_TIMEOUT"
   -o ConnectionAttempts=1
   -o PasswordAuthentication=no
   -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa)
@@ -372,9 +389,5 @@ if ! command -v ssh >/dev/null 2>&1; then
   exit 1
 fi
 
-if [ ! -f "$KEY" ] || [ ! -r "$KEY" ]; then
-  echo "error: identity file not readable: $KEY (set RM_KEY)" >&2
-  exit 1
-fi
 
 exec "${SSH_BASE[@]}" ${SSH_OPTS[@]+"${SSH_OPTS[@]}"} -- "$HOST" ${CMD[@]+"${CMD[@]}"}

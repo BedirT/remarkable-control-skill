@@ -105,7 +105,7 @@ def main(argv=None):
     if args.dry_run:
         for name, value in seq:
             print(f"EV_ABS/EV_SYN {name}={value}")
-        print(f"# settle {args.settle}s, then verify with rm-screenshot.sh")
+        print(f"# settle {args.settle}s, then verify with scripts/rm-capture.py --out screen.png")
         return 0
 
     try:

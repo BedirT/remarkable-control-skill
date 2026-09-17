@@ -196,7 +196,7 @@ remap, but stop/grab is deterministic and autonomy-friendly.
 E-ink needs ~100–450 ms per refresh; ghosting lies. After every inject:
 
 1. Sleep 0.5–1.0 s after lift (swipe: after the final `SYN_REPORT`).
-2. Capture via `scripts/rm-screenshot.sh` and confirm the expected UI
+2. Capture via `scripts/rm-capture.py --out verify.png` and confirm the expected UI
    state from the PNG — never assume the tap landed, never force an
    e-ink refresh to "check".
 3. On mismatch: re-run discovery (§2), check orientation (§4), retry

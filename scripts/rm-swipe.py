@@ -119,7 +119,7 @@ def main(argv=None):
         print(f"swipe ({args.x1},{args.y1}) -> ({args.x2},{args.y2}) "
               f"steps={args.steps} step_delay={args.step_delay}s")
         print(f"first={pts[0]} mid={pts[len(pts) // 2]} last={pts[-1]}")
-        print(f"# lift, settle {args.settle}s, then verify with rm-screenshot.sh")
+        print(f"# lift, settle {args.settle}s, then verify with scripts/rm-capture.py --out screen.png")
         return 0
 
     try:

@@ -52,7 +52,7 @@ host remarkable
   PasswordAuthentication no
 ```
 
-Both wrappers (`scripts/rm-ssh.sh`, `scripts/rm-screenshot.sh`) honor `RM_CONNECT_TIMEOUT` (integer 1..30, default 5); the 2 s fail-fast probe needs `RM_CONNECT_TIMEOUT=2` or raw ssh/config.
+`scripts/rm-capture.py` (`--timeout`, integer 1..30, default 5) and `scripts/rm-ssh.sh` (`RM_CONNECT_TIMEOUT`) fail fast; the 2 s fail-fast probe needs `--timeout 2` / `RM_CONNECT_TIMEOUT=2` or raw ssh/config.
 
 If you see `no matching host key type … Their offer: ssh-rsa` (OpenSSH ≥ 8.8 vs Dropbear), append:
 
