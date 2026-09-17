@@ -209,9 +209,12 @@ def stroke_cmds(sub, proj, press0, press1, flip_y=False):
                 math.hypot(b[0] - a[0], b[1] - a[1])
                 for a, b in zip(chunk, chunk[1:])
             )
-            steps = max(2, min(2000, int(total / 25) + 1))
+            steps = max(8, min(1500, int(total / 3) + 1))
             coords = " ".join(f"{int(x)} {int(y)}" for x, y in chunk)
-            out.append(f"S {steps} 12 {press0} {press1} {coords}")
+            # ~3 px/frame at 10 ms ~= 300 px/s hand speed. Sparse fast
+            # jumps let the tablet smoothing cut curve corners (scribble
+            # look on logos); dense slow frames track the true path.
+            out.append(f"S {steps} 10 {press0} {press1} {coords}")
     return out
 
 
