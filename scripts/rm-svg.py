@@ -7,7 +7,7 @@ subpath (pen-down stroke). Curves (C/S/Q/T/A) are flattened to
 polylines; every M starts a new stroke (pen lift between subpaths).
 
 Usage:
-    python3 scripts/rm-svg.py drawing.svg [--box X Y W H] [--press N]
+    python3 scripts/rm-svg.py drawing.svg [--box X Y W H] [--press A[:B]]
     python3 scripts/rm-svg.py drawing.svg --run [--box ...] [--press ...]
 
 --run feeds each stroke to the `pend` daemon's /tmp/pen.fifo over the
@@ -151,9 +151,11 @@ def parse_path(d):
     if cur:
         subs.append(cur)
     return [s for s in subs if len(s) > 1]
-def stroke_cmds(sub, proj, press, flip_y=False):
+
+def stroke_cmds(sub, proj, press0, press1, flip_y=False):
     """One FIFO `S` line per subpath (single pen-down pass).
 
+    Pressure ramps press0->press1 along the whole subpath.
     Coords are correct screen pixels. flip_y compensates a legacy
     pend build whose map is y-inverted (deviation, not the rule).
     """
@@ -173,7 +175,7 @@ def stroke_cmds(sub, proj, press, flip_y=False):
             )
             steps = max(2, min(2000, int(total / 25) + 1))
             coords = " ".join(f"{int(x)} {int(y)}" for x, y in chunk)
-            out.append(f"S {steps} 12 {press} {coords}")
+            out.append(f"S {steps} 12 {press0} {press1} {coords}")
     return out
 
 
@@ -202,14 +204,16 @@ def main(argv):
         return 2
     path = argv[0]
     box = [100, 200, SCREEN_W - 200, SCREEN_H - 400]
-    press, run, flip_y = 1500, False, False
+    press0, press1, run, flip_y = 1500, 1500, False, False
     i = 1
     while i < len(argv):
         if argv[i] == "--box":
             box = [int(v) for v in argv[i + 1:i + 5]]
             i += 5
         elif argv[i] == "--press":
-            press = int(argv[i + 1])
+            pair = argv[i + 1].split(":")
+            press0 = int(pair[0])
+            press1 = int(pair[1]) if len(pair) > 1 else press0
             i += 2
         elif argv[i] == "--run":
             run = True
@@ -232,7 +236,7 @@ def main(argv):
     if not subs:
         print("no drawable paths found", file=sys.stderr)
         return 1
-    cmds = stroke_cmds(subs, proj, press, flip_y)
+    cmds = stroke_cmds(subs, proj, press0, press1, flip_y)
     print(f"{len(subs)} subpaths -> {len(cmds)} strokes", file=sys.stderr)
     if run:
         import time

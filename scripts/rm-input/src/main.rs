@@ -521,8 +521,13 @@ fn map_pen(sx: i32, sy: i32) -> (i32, i32) {
 }
 
 // One pen-down stroke in DEVICE coords. Hover first (proximity arms the
-// tool), then contact with constant pressure, then a clean lift.
-fn pen_stroke(fd: RawFd, x1: i32, y1: i32, x2: i32, y2: i32, steps: i32, step_ms: u64, press: i32) {
+// tool), then contact with pressure ramping p0->p1, then a clean lift.
+// Pressure ramp helper (p0==p1 draws flat).
+fn lerp_press(p0: i32, p1: i32, num: i64, den: i64) -> i32 {
+    if den <= 0 { return p0; }
+    p0 + ((p1 - p0) as i64 * num / den) as i32
+}
+fn pen_stroke(fd: RawFd, x1: i32, y1: i32, x2: i32, y2: i32, steps: i32, step_ms: u64, p0: i32, p1: i32) {
     emit(fd, EV_KEY, BTN_TOOL_PEN, 1);
     emit(fd, EV_ABS, ABS_X, x1);
     emit(fd, EV_ABS, ABS_Y, y1);
@@ -537,7 +542,7 @@ fn pen_stroke(fd: RawFd, x1: i32, y1: i32, x2: i32, y2: i32, steps: i32, step_ms
         }
         emit(fd, EV_ABS, ABS_X, x1 + (x2 - x1) * i / steps);
         emit(fd, EV_ABS, ABS_Y, y1 + (y2 - y1) * i / steps);
-        emit(fd, EV_ABS, ABS_PRESSURE, press);
+        emit(fd, EV_ABS, ABS_PRESSURE, lerp_press(p0, p1, i as i64, steps as i64));
         emit(fd, EV_ABS, ABS_DISTANCE, 0);
         emit(fd, EV_ABS, ABS_TILT_X, 0);
         emit(fd, EV_ABS, ABS_TILT_Y, 0);
@@ -555,7 +560,7 @@ fn pen_stroke(fd: RawFd, x1: i32, y1: i32, x2: i32, y2: i32, steps: i32, step_ms
 // Multi-point stroke in DEVICE coords: one hover, one contact pass
 // through every point, one lift. Steps split across segments
 // proportional to segment length (min 1 step per segment).
-fn pen_stroke_multi(fd: RawFd, pts: &[(i32, i32)], steps: i32, step_ms: u64, press: i32) {
+fn pen_stroke_multi(fd: RawFd, pts: &[(i32, i32)], steps: i32, step_ms: u64, p0: i32, p1: i32) {
     emit(fd, EV_KEY, BTN_TOOL_PEN, 1);
     emit(fd, EV_ABS, ABS_X, pts[0].0);
     emit(fd, EV_ABS, ABS_Y, pts[0].1);
@@ -563,16 +568,18 @@ fn pen_stroke_multi(fd: RawFd, pts: &[(i32, i32)], steps: i32, step_ms: u64, pre
     sync(fd);
     msleep(100);
     // (no lone TOUCH frame: it joins the first contact frame below)
-    let mut lens = Vec::new();
+    let mut seg = Vec::new();
+    let mut pre = Vec::new();
     let mut total: i64 = 0;
     for w in pts.windows(2) {
         let l = ((w[1].0 - w[0].0) as i64).abs() + ((w[1].1 - w[0].1) as i64).abs();
-        lens.push(l);
+        seg.push(l);
+        pre.push(total);
         total += l;
     }
     for (si, w) in pts.windows(2).enumerate() {
         let n = if total > 0 {
-            std::cmp::max(1, (lens[si] * steps as i64 / total) as i32)
+            std::cmp::max(1, (seg[si] * steps as i64 / total) as i32)
         } else {
             1
         };
@@ -582,7 +589,7 @@ fn pen_stroke_multi(fd: RawFd, pts: &[(i32, i32)], steps: i32, step_ms: u64, pre
             }
             emit(fd, EV_ABS, ABS_X, w[0].0 + (w[1].0 - w[0].0) * i / n);
             emit(fd, EV_ABS, ABS_Y, w[0].1 + (w[1].1 - w[0].1) * i / n);
-            emit(fd, EV_ABS, ABS_PRESSURE, press);
+            emit(fd, EV_ABS, ABS_PRESSURE, lerp_press(p0, p1, pre[si] + seg[si] * i as i64 / n as i64, total));
             emit(fd, EV_ABS, ABS_DISTANCE, 0);
             emit(fd, EV_ABS, ABS_TILT_X, 0);
             emit(fd, EV_ABS, ABS_TILT_Y, 0);
@@ -745,7 +752,7 @@ fn main() {
         };
         let press = clamp(press, 1, PEN_PRESSURE_MAX, "PRESS");
         let fd = create_pen_device();
-        pen_stroke(fd, dx1, dy1, dx2, dy2, steps, step_ms, press);
+        pen_stroke(fd, dx1, dy1, dx2, dy2, steps, step_ms, press, press);
         destroy(fd);
         println!("ok pen {} {} -> {} {} steps={}", dx1, dy1, dx2, dy2, steps);
         return;
@@ -802,20 +809,22 @@ fn main() {
                     break;
                 }
                 let p: Vec<&str> = t.split_whitespace().collect();
-                if p.len() < 8 || p[0] != "S" || (p.len() - 4) % 2 != 0 {
+                if p.len() < 9 || p[0] != "S" || (p.len() - 5) % 2 != 0 {
                     continue;
                 }
                 let num = |i: usize| p[i].parse::<i32>().unwrap_or(-1);
                 let steps = num(1);
                 let step_ms = num(2);
-                let press = num(3);
+                let p0 = num(3);
+                let p1 = num(4);
                 if steps < 1 || steps > 2000 || step_ms < 0 || step_ms > 5000
-                    || press < 1 || press > PEN_PRESSURE_MAX {
+                    || p0 < 1 || p0 > PEN_PRESSURE_MAX
+                    || p1 < 1 || p1 > PEN_PRESSURE_MAX {
                     continue;
                 }
                 let mut pts = Vec::new();
                 let mut ok = true;
-                for w in p[4..].chunks(2) {
+                for w in p[5..].chunks(2) {
                     let sx: i32 = w[0].parse().unwrap_or(-1);
                     let sy: i32 = w[1].parse().unwrap_or(-1);
                     if sx < 0 || sx > 1403 || sy < 0 || sy > 1871 {
@@ -825,7 +834,8 @@ fn main() {
                     pts.push(map_pen(sx, sy));
                 }
                 if ok && pts.len() >= 2 {
-                    pen_stroke_multi(fd, &pts, steps, step_ms as u64, press);
+                    pen_stroke_multi(fd, &pts, steps, step_ms as u64, p0, p1);
+                    println!("S ok pts={} p={}-{}", pts.len(), p0, p1);
                 }
             }
             if quit {
@@ -857,13 +867,13 @@ fn main() {
             pts.push(map_pen(sx, sy));
         }
         let fd = create_pen_device();
-        pen_stroke_multi(fd, &pts, steps, step_ms, press);
+        pen_stroke_multi(fd, &pts, steps, step_ms, press, press);
         destroy(fd);
         println!("ok penpoly {} pts steps={}", pts.len(), steps);
         return;
     }
 
-    eprintln!("usage: rm-input --probe | tap X Y | swipe X1 Y1 X2 Y2 [STEPS=24] [STEP_MS=12] | replay [FILE] | pen X1 Y1 X2 Y2 [STEPS=24] [STEP_MS=12] [PRESS=1500] | penraw DX1 DY1 DX2 DY2 ...");
+    eprintln!("usage: rm-input --probe | tap X Y | swipe X1 Y1 X2 Y2 [STEPS=24] [STEP_MS=12] | replay [FILE] | pen X1 Y1 X2 Y2 [STEPS=24] [STEP_MS=12] [PRESS=1500] | penraw DX1 DY1 DX2 DY2 ... | pend (FIFO: S STEPS STEP_MS P0 P1 X1 Y1 ...)");
     eprintln!("coords are SCREEN pixels (1404x1872 portrait); Y flip applied internally; replay is device coords");
     exit(2);
 }

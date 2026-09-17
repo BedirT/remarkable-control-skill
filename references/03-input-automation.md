@@ -224,8 +224,12 @@ py = raw_y * 1872 // y_max   # maxima from EVIOCGABS / evtest caps
     nodes: zero ink.
  2. Ink must flow through the HELD node. `pend` creates ONE pen
     device and reads strokes from `/tmp/pen.fifo`
-    (`S STEPS STEP_MS PRESS X1 Y1 [X2 Y2 ...]`, screen coords;
-    `Q` quits). Transient `pen`/`penpoly` nodes never reach the
+    (`S STEPS STEP_MS P0 P1 X1 Y1 [X2 Y2 ...]`, screen coords,
+    pressure ramps P0→P1 along the stroke, 1..4095, P0==P1 flat;
+    `Q` quits; every stroke acked in the log as `S ok`). Proven
+    live 2026-09-18: flat ladder 500/1500/2500/3800 shows four
+    distinct weights plus a 200→4000 swell on ballpoint.
+    Transient `pen`/`penraw`/`penpoly` nodes never reach the
     app — protocol spares only.
  3. Screen→digitizer mapping is digX = (1871−y)×11.199,
     digY = x×11.199 — the SAME Y flip as touch (5/5 dots exact,
