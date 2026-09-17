@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""rmk — one command to drive a reMarkable 2 over USB SSH.
+"""rm2ctrl — one command to drive a reMarkable 2 over USB SSH.
 
 Subcommands wrap the skill's scripts with stable flags so agents learn
 one tool instead of five scripts:
 
-    rmk shot                     take a screenshot (read-only)
-    rmk tap X Y                  finger tap, screen pixels (1404x1872)
-    rmk swipe X1 Y1 X2 Y2        finger swipe, natural profile
-    rmk draw FILE.svg --run      draw SVG line art with the pen
-    rmk ssh -- <cmd>             raw command on the tablet (escape hatch)
+    rm2ctrl shot                     take a screenshot (read-only)
+    rm2ctrl tap X Y                  finger tap, screen pixels (1404x1872)
+    rm2ctrl swipe X1 Y1 X2 Y2        finger swipe, natural profile
+    rm2ctrl draw FILE.svg --run      draw SVG line art with the pen
+    rm2ctrl ssh -- <cmd>             raw command on the tablet (escape hatch)
 
 Connection flags (--host/--key/--timeout) work on every subcommand and
 override RM_HOST / RM_KEY / RM_CONNECT_TIMEOUT. Full reference: CLI.md.
@@ -30,7 +30,7 @@ W, H = 1404, 1872
 
 
 def die(msg, code=2):
-    print("rmk: error: %s" % msg, file=sys.stderr)
+    print("rm2ctrl: error: %s" % msg, file=sys.stderr)
     return code
 
 
@@ -136,8 +136,8 @@ def cmd_ssh(args):
 
 def build_parser():
     p = argparse.ArgumentParser(
-        prog="rmk", description="Drive a reMarkable 2 over USB SSH.")
-    p.add_argument("--version", action="version", version="rmk " + VERSION)
+        prog="rm2ctrl", description="Drive a reMarkable 2 over USB SSH.")
+    p.add_argument("--version", action="version", version="rm2ctrl " + VERSION)
     p.add_argument("--host", help="SSH target (default root@10.11.99.1)")
     p.add_argument("--key", help="SSH identity file")
     p.add_argument("--timeout", help="connect timeout, seconds (1..30)")
@@ -181,7 +181,7 @@ def build_parser():
     d.set_defaults(func=cmd_draw)
     e = sub.add_parser("ssh", help="raw command on the tablet")
     e.add_argument("remote", nargs=argparse.REMAINDER,
-                   help="command after --, e.g. rmk ssh -- true")
+                   help="command after --, e.g. rm2ctrl ssh -- true")
     e.set_defaults(func=cmd_ssh)
     return p
 
@@ -193,7 +193,7 @@ def main(argv=None):
         if remote[:1] == ["--"]:
             remote = remote[1:]
         if not remote:
-            return die("ssh needs a command: rmk ssh -- true")
+            return die("ssh needs a command: rm2ctrl ssh -- true")
         args.remote = remote
     return args.func(args)
 if __name__ == "__main__":

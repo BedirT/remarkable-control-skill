@@ -1,20 +1,20 @@
-# `rmk` — reMarkable 2 control CLI
+# `rm2ctrl` — reMarkable 2 control CLI
 
 One command drives the tablet over USB SSH. It wraps the skill's
 scripts (`scripts/rm-capture.py`, `scripts/rm-svg.py`,
 `scripts/rm-ssh.sh`, tablet-side `/tmp/rm-input`) with stable flags,
 so agents learn one tool instead of five scripts. The skill
 ([SKILL.md](SKILL.md)) stays the brain: it teaches *when* to run what
-and how to verify. `rmk` is the hands.
+and how to verify. `rm2ctrl` is the hands.
 
 ## Install
 
 ```sh
 git clone https://github.com/BedirT/remarkable-control-skill
 cd remarkable-control-skill
-chmod +x rmk
-export PATH="$PWD:$PATH"   # or symlink rmk into ~/bin
-rmk shot --dry-run         # prove the SSH path, no tablet changes
+chmod +x rm2ctrl
+export PATH="$PWD:$PATH"   # or symlink rm2ctrl into ~/bin
+rm2ctrl shot --dry-run         # prove the SSH path, no tablet changes
 ```
 
 Needs: Python 3 (stdlib only), OpenSSH client, USB-connected
@@ -37,39 +37,39 @@ These override `RM_HOST` / `RM_KEY` / `RM_CONNECT_TIMEOUT`.
 
 ## Commands
 
-### `rmk shot` — screenshot (read-only)
+### `rm2ctrl shot` — screenshot (read-only)
 
 ```sh
-rmk shot [--out screen.png] [--raw frame.raw] [--force] [--dry-run]
+rm2ctrl shot [--out screen.png] [--raw frame.raw] [--force] [--dry-run]
 ```
 
 Pulls xochitl's composed 1404×1872 page over SSH (~8 s). No taps,
 no refresh, no tablet changes. `--dry-run` prints the plan without
 touching the device. Strict hash gate: wrong firmware aborts loudly.
 
-### `rmk tap` — finger tap
+### `rm2ctrl tap` — finger tap
 
 ```sh
-rmk tap X Y        # X 0..1403 left to right, Y 0..1871 top to bottom
+rm2ctrl tap X Y        # X 0..1403 left to right, Y 0..1871 top to bottom
 ```
 
 Out-of-range coords are rejected before anything touches the device.
-Always verify with `rmk shot` after.
+Always verify with `rm2ctrl shot` after.
 
-### `rmk swipe` — finger swipe
+### `rm2ctrl swipe` — finger swipe
 
 ```sh
-rmk swipe X1 Y1 X2 Y2 [--steps 24] [--step-ms 12]
+rm2ctrl swipe X1 Y1 X2 Y2 [--steps 24] [--step-ms 12]
 ```
 
 Natural finger profile by default (small touch size, eased pace —
 the profile proven to trigger page creation in notebooks). Judge page
 creation by UI state, never by canvas bytes.
 
-### `rmk draw` — pen drawing from SVG
+### `rm2ctrl draw` — pen drawing from SVG
 
 ```sh
-rmk draw FILE.svg [--box X Y W H] [--speed 1-5] [--press A[:B]]
+rm2ctrl draw FILE.svg [--box X Y W H] [--speed 1-5] [--press A[:B]]
   [--skip-fill COLOR]... [--skip-class NAME]... [--run]
 ```
 
@@ -81,13 +81,13 @@ Parses `<path>`/`<polyline>`/`<polygon>`, fits into the canvas box
 Skip invisible shapes whose outlines would tangle the drawing:
 
 ```sh
-rmk draw logo.svg --run --box 200 500 1000 700 --skip-fill fff
+rm2ctrl draw logo.svg --run --box 200 500 1000 700 --skip-fill fff
 ```
 
-### `rmk ssh` — escape hatch
+### `rm2ctrl ssh` — escape hatch
 
 ```sh
-rmk ssh -- <command>...     # raw command on the tablet
+rm2ctrl ssh -- <command>...     # raw command on the tablet
 ```
 
 Prefer the four commands above. Raw SSH is for file ops and
@@ -113,9 +113,9 @@ never 4–5 for anything a human will look at.
 ## Observe–act–verify
 
 ```sh
-rmk shot --out before.png
-rmk tap 660 1445
-rmk shot --out after.png     # e-ink needs ~1 s settle first
+rm2ctrl shot --out before.png
+rm2ctrl tap 660 1445
+rm2ctrl shot --out after.png     # e-ink needs ~1 s settle first
 ```
 
 One action, then a screenshot. Never assume a tap landed.
