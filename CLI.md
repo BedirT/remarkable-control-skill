@@ -1,4 +1,4 @@
-# `rm2ctrl` — reMarkable 2 control CLI
+# `rm2ctrl`, reMarkable 2 control CLI
 
 One command drives the tablet over USB SSH. It wraps the skill's
 scripts (`scripts/rm-capture.py`, `scripts/rm-svg.py`,
@@ -37,7 +37,7 @@ These override `RM_HOST` / `RM_KEY` / `RM_CONNECT_TIMEOUT`.
 
 ## Commands
 
-### `rm2ctrl shot` — screenshot (read-only)
+### `rm2ctrl shot`, screenshot (read-only)
 
 ```sh
 rm2ctrl shot [--out screen.png] [--raw frame.raw] [--force] [--dry-run]
@@ -47,7 +47,7 @@ Pulls xochitl's composed 1404×1872 page over SSH (~8 s). No taps,
 no refresh, no tablet changes. `--dry-run` prints the plan without
 touching the device. Strict hash gate: wrong firmware aborts loudly.
 
-### `rm2ctrl tap` — finger tap
+### `rm2ctrl tap`, finger tap
 
 ```sh
 rm2ctrl tap X Y        # X 0..1403 left to right, Y 0..1871 top to bottom
@@ -56,17 +56,17 @@ rm2ctrl tap X Y        # X 0..1403 left to right, Y 0..1871 top to bottom
 Out-of-range coords are rejected before anything touches the device.
 Always verify with `rm2ctrl shot` after.
 
-### `rm2ctrl swipe` — finger swipe
+### `rm2ctrl swipe`, finger swipe
 
 ```sh
 rm2ctrl swipe X1 Y1 X2 Y2 [--steps 24] [--step-ms 12]
 ```
 
-Natural finger profile by default (small touch size, eased pace —
+Natural finger profile by default (small touch size, eased pace,
 the profile proven to trigger page creation in notebooks). Judge page
 creation by UI state, never by canvas bytes.
 
-### `rm2ctrl draw` — pen drawing from SVG
+### `rm2ctrl draw`, pen drawing from SVG
 
 ```sh
 rm2ctrl draw FILE.svg [--box X Y W H] [--speed 1-5] [--press A[:B]]
@@ -84,7 +84,7 @@ Skip invisible shapes whose outlines would tangle the drawing:
 rm2ctrl draw logo.svg --run --box 200 500 1000 700 --skip-fill fff
 ```
 
-### `rm2ctrl ssh` — escape hatch
+### `rm2ctrl ssh`, escape hatch
 
 ```sh
 rm2ctrl ssh -- <command>...     # raw command on the tablet
@@ -97,7 +97,7 @@ diagnostics the CLI does not cover yet.
 
 | Level | Pace | Feels like | Path error* |
 |---|---|---|---|
-| 1 careful | ~50 px/s | tracing with a ruler | — |
+| 1 careful | ~50 px/s | tracing with a ruler |, |
 | 2 tracing | ~125 px/s | careful hand | ~1 px mean |
 | 3 steady | ~300 px/s | normal writing | ~3 px mean |
 | 4 quick | ~800 px/s | fast sketch | visible wobble |

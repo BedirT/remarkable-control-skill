@@ -29,10 +29,10 @@ on the tablet.
 So I did the investigation by hand and built two things that serve each
 other:
 
-- **`rm2ctrl`** ([CLI.md](CLI.md)) — a small command-line tool that drives
+- **`rm2ctrl`** ([CLI.md](CLI.md)), a small command-line tool that drives
   the tablet: screenshot, tap, swipe, pen drawing, raw SSH. Anything,
   human or agent, can run it.
-- **The skill** ([SKILL.md](SKILL.md)) — teaches an agent *when* to run
+- **The skill** ([SKILL.md](SKILL.md)), teaches an agent *when* to run
   what: how the screens connect, what to check after each step, and
   the safety rules. The CLI is the hands; the skill is the brain.
 

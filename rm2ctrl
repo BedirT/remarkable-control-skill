@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""rm2ctrl — one command to drive a reMarkable 2 over USB SSH.
+"""rm2ctrl, one command to drive a reMarkable 2 over USB SSH.
 
 Subcommands wrap the skill's scripts with stable flags so agents learn
 one tool instead of five scripts:
