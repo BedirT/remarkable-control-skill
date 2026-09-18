@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner.png" alt="remarkable-control-skill — agent control for reMarkable 2 — observe · act · verify" width="100%" />
+  <img src="assets/banner.png" alt="remarkable-control-skill, agent control for reMarkable 2, observe act verify" width="100%" />
 </p>
 
 <h1 align="center">remarkable-control-skill</h1>
@@ -10,16 +10,28 @@
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license: MIT" />
 </p>
 
-<p align="center">
-Agent control for the reMarkable 2 over plain USB SSH.
-One CLI for hands, one skill for brains.
-</p>
+An agent skill for controlling a reMarkable 2 tablet. It was born out of
+my own experiments and wanting some extra tooling on my reMarkable.
 
-Two things live here, and they serve each other:
+My motto for agentic development: your harness is only as strong as the
+least observable end state you have. And the reMarkable 2 exposes no
+screen recording of any kind. The only solution I could find out of the
+box was ScreenShare, which needs a manual connection first and then lets
+the agent work. Useless to me, because the development I was doing
+restarts the tablet quite often and needs hands-off test suites.
 
-- **`rm2ctrl`** — a small command-line tool that drives the tablet:
-  screenshot, tap, swipe, pen drawing, raw SSH. Anything — human or
-  agent — can run it. Full reference in [CLI.md](CLI.md).
+There was no API for any of this, so I reverse-engineered the whole path
+under my own guidance, with my AI agents doing the heavy lifting (Codex
+Astra 6 and Meta Spark 1.3): how the screen is composed, where the
+pixels live, and how to pull them out over plain SSH with nothing installed
+on the tablet.
+
+So I did the investigation by hand and built two things that serve each
+other:
+
+- **`rm2ctrl`** ([CLI.md](CLI.md)) — a small command-line tool that drives
+  the tablet: screenshot, tap, swipe, pen drawing, raw SSH. Anything,
+  human or agent, can run it.
 - **The skill** ([SKILL.md](SKILL.md)) — teaches an agent *when* to run
   what: how the screens connect, what to check after each step, and
   the safety rules. The CLI is the hands; the skill is the brain.
@@ -74,18 +86,17 @@ shot`), **act** exactly once (`rm2ctrl tap`/`swipe`/`draw`), **verify**
 with another screenshot. E-ink needs ~1 s to settle; state is proven
 by capture, never assumed. Start at [SKILL.md](SKILL.md): it routes to
 seven references (access, display, input, files, screen map, tooling,
-loop discipline) and states the safety rules — never force a refresh,
+loop discipline) and states the safety rules: never force a refresh,
 stop xochitl before writing its files, fail fast, never prompt.
 
 ## Why this exists
 
 Nothing on the tablet helps an agent. No screenshot API that survives,
-no UI automation layer, no screen recording. The only stock way out
-(ScreenShare) needs a manual tap and dies on restart. So the whole
-path was reverse-engineered: where xochitl keeps its composed page and
-how to pull it over plain SSH with nothing installed, plus a tiny
-static helper that taps, swipes, and draws real pen strokes through
-kernel input devices. Every address is pinned per firmware build and
+no UI automation layer, no screen recording. So the whole path was
+reverse-engineered: where xochitl keeps its composed page and how to
+pull it over plain SSH with nothing installed, plus a tiny static
+helper that taps, swipes, and draws real pen strokes through kernel
+input devices. Every address is pinned per firmware build and
 re-verified on every run.
 
 Target is the **reMarkable 2**. Paper Pro differences are flagged
