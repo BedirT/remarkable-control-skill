@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""rm-svg.py — SVG line art to reMarkable pen strokes.
+"""rm-svg.py, SVG line art to reMarkable pen strokes.
 
 Parses <path>/<polyline>/<polygon> from an SVG file, fits the drawing
 into a canvas rectangle, and emits one FIFO `S` stroke line per
@@ -18,7 +18,7 @@ existing USB SSH session (otherwise lines print to stdout). Needs the
 pend session live (03 §5b), the notebook page open with a pen tool
 selected; strokes land in SCREEN coords (1404x1872 portrait).
 --flip-y compensates a legacy inverted pend build (deviation, not the
-rule — current builds take plain screen coords).
+rule, current builds take plain screen coords).
 
 SVG y grows downward, same as the screen: no axis flip needed.
 """
