@@ -7,17 +7,17 @@ Capture is read-only and safe to poll. Never force an e-ink refresh to verify �
 - Resolution **1404 × 1872 portrait** (W × H).
 - Pipeline: no hardware EPDC on rM2 — xochitl links SWTCON (software EPDC) wrapping a QImage; capture reads that image, never the e-ink controller.
 
-## 2. Capture: `scripts/rm-capture.py` (proven live 2026-09-16, fw 20260827113527)
+## 2. Capture: `scripts/rm2ctrl-capture.py` (proven live 2026-09-16, fw 20260827113527)
 
 ```sh
-scripts/rm-capture.py --out screen.png   # ~5 s, writes screen.png + screen.raw
+scripts/rm2ctrl-capture.py --out screen.png   # ~5 s, writes screen.png + screen.raw
 ```
 
 xochitl's EPFramebufferCarta1000 singleton (static `0x1517084`) owns an inherited 1404×1872 RGB32 QImage; the pixel allocation sits in an ordinary readable mapping. No tablet-side setup, taps, refresh, uploads, ptrace, or signals.
 
-Chain: pidof xochitl → static → vptr must equal `0x120f738` (Carta1000) → 28-byte image pair at +88 → image A header `1404×1872 fmt=4 bpl=5616`. Then: 10,513,152-byte extent inside ONE `rw-p` mapping (never `/dev/fb0`) → 64-byte probe → one page-aligned raw `dd` (`bs=4096`) over `scripts/rm-ssh.sh` stdout → slice → host PNG decode (B,G,R → RGB).
+Chain: pidof xochitl → static → vptr must equal `0x120f738` (Carta1000) → 28-byte image pair at +88 → image A header `1404×1872 fmt=4 bpl=5616`. Then: 10,513,152-byte extent inside ONE `rw-p` mapping (never `/dev/fb0`) → 64-byte probe → one page-aligned raw `dd` (`bs=4096`) over `scripts/rm2ctrl-ssh.sh` stdout → slice → host PNG decode (B,G,R → RGB).
 
-The static address, vptr, field offsets, and exe load bias are firmware-pinned constants, proven only on 20260827113527 — re-verify them after any update (re-derivation notes live outside the repo; ask the maintainer). `rm-capture.py` enforces this itself (firmware + xochitl/QtGui hash check) and refuses unknown builds. Re-resolved every run: pid, helper pointer, pixel pointer.
+The static address, vptr, field offsets, and exe load bias are firmware-pinned constants, proven only on 20260827113527 — re-verify them after any update (re-derivation notes live outside the repo; ask the maintainer). `rm2ctrl-capture.py` enforces this itself (firmware + xochitl/QtGui hash check) and refuses unknown builds. Re-resolved every run: pid, helper pointer, pixel pointer.
 
 Pre- and post-transfer rechecks (pid, exe mapping, static, vptr, pair, header) abort on any change; the recheck is not atomic, so one read is a candidate, not a verified current-panel image. Budgets: 12 MiB process-memory cap, 60 s deadline (30 SSH ops). Timed 2026-09-16, 3 back-to-back runs on fw 20260827113527: 8.3 s each — snapshot+hash gate 1.3 s, metadata+pre-recheck+probe 3.7 s, 10.5 MB bulk transfer 1.0 s, PNG encode 0.1 s, final recheck+publish 2.3 s. Byte-exact repeat: two back-to-back runs produced identical SHA-256. Tracking: a fresh pen stroke appeared in exactly its region on the next capture. Output PNG is 1404×1872 portrait directly — no transpose needed.
 

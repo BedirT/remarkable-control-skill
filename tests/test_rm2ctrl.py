@@ -11,7 +11,7 @@ SVG = ('<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">'
 
 
 def test_speed_table_default_is_tracing_pace():
-    assert rm2ctrl.load("rm_svg", "rm-svg.py").SPEEDS[2] == (1.5, 12)
+    assert rm2ctrl.load("rm_svg", "rm2ctrl-svg.py").SPEEDS[2] == (1.5, 12)
 
 
 def test_draw_dry_prints_strokes_without_device(tmp_path, capsys):

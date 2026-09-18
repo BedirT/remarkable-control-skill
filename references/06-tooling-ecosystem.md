@@ -13,12 +13,12 @@ input / files), and mixing planes causes flakiness.
 
 | Tool | Repo | Transport | Reported perf | Status | Use for |
 |---|---|---|---|---|---|
-| `scripts/rm-capture.py` (this repo) | references/02-display-screenshot.md §2 | xochitl's composed QImage (1404×1872 RGB32) → raw dd over `rm-ssh.sh` stdout → host PNG; pre/post rechecks | ~5 s per shot, ~16–30 SSH ops | Proven live 2026-09-16 on fw 20260827113527 | Headless single-shot capture with zero tablet setup; byte-exact repeats, tracks pen strokes |
+| `scripts/rm2ctrl-capture.py` (this repo) | references/02-display-screenshot.md §2 | xochitl's composed QImage (1404×1872 RGB32) → raw dd over `rm2ctrl-ssh.sh` stdout → host PNG; pre/post rechecks | ~5 s per shot, ~16–30 SSH ops | Proven live 2026-09-16 on fw 20260827113527 | Headless single-shot capture with zero tablet setup; byte-exact repeats, tracks pen strokes |
 | Official ScreenShare (+ rmview backend) | In-box firmware; https://github.com/bordaigorl/rmview | TLS VNC `:5900` + UDP `:5901` | Start ScreenShare on the tablet first (one manual tap) | Second option when 02 §2 fails; Paper Pro path |
 
 Backend picker:
 
-- 2026 fw (20260827113527) → `scripts/rm-capture.py` (02 §2, no tablet step).
+- 2026 fw (20260827113527) → `scripts/rm2ctrl-capture.py` (02 §2, no tablet step).
 - If it fails → stop on ABORT in strict mode (02 §3); ScreenShare/photo only if the user allows a human step.
 - USB (`10.11.99.1`) beats WiFi for every row.
 
@@ -27,7 +27,7 @@ Backend picker:
 | Tool | Repo | Lang / needs | Status | Use for |
 |---|---|---|---|---|
 | libevdev (C read + uinput) | https://gitlab.freedesktop.org/libevdev/libevdev — docs http://www.freedesktop.org/software/libevdev/doc/latest | C, reMarkable toolchain | Maintained upstream | Robust on-device injector; prefer over raw ioctls |
- | python-evdev | https://github.com/gvalkov/python-evdev — docs https://python-evdev.readthedocs.io/ | Python; needs pip/opkg (`pyevdev`) on device | Maintained upstream | Superseded on stock fw (no Python on tablet): use `scripts/rm-input/` helper instead; still fine for host-side prototyping |
+ | python-evdev | https://github.com/gvalkov/python-evdev — docs https://python-evdev.readthedocs.io/ | Python; needs pip/opkg (`pyevdev`) on device | Maintained upstream | Superseded on stock fw (no Python on tablet): use `scripts/rm2ctrl-input/` helper instead; still fine for host-side prototyping |
 | evemu (record / replay) | https://gitlab.freedesktop.org/libevdev/evemu | C tools, cross-compiled | Maintained upstream | `evemu-record` / `play` / `describe` gesture macros |
 | evtest | https://gitlab.freedesktop.org/libevdev/evtest (or Toltec `opkg install evtest` (Toltec: OS <= 3.3.2)) | Binary on device | Maintained upstream | Capability dumps, absinfo maxima, live event watches |
 | oxide `inject_evdev` | https://github.com/Eeems-Org/oxide/tree/master/applications/inject_evdev | C++ (Qt-era precedent) | Precedent, stable | String-to-evdev writer covering ABS/KEY/SYN/REL |
@@ -81,12 +81,12 @@ last-listed folder — list the target folder first), `GET
 
 ## 5. Recommended minimal kit (autonomy default)
 
-1. **Observe:** `scripts/rm-capture.py` → PNG + 10 513 152 B raw (02 §2).
+1. **Observe:** `scripts/rm2ctrl-capture.py` → PNG + 10 513 152 B raw (02 §2).
 2. **Act (bytes):** USB web UI (`curl` against `10.11.99.1`) or SSH +
    rsync against `/home/root/.local/share/remarkable/xochitl/`
    (stop xochitl before writing the tree, restart after).
- 3. **Act (pixels):** `/tmp/rm-input` over `scripts/rm-ssh.sh` (static
-   `scripts/rm-input/` uinput helper, scp'd to /tmp on first use;
+ 3. **Act (pixels):** `/tmp/rm2ctrl-input` over `scripts/rm2ctrl-ssh.sh` (static
+   `scripts/rm2ctrl-input/` uinput helper, scp'd to /tmp on first use;
    pen stroke + keys not implemented).
 4. **Render ink:** rmscene / rmc for v6; `rmapi geta` only for basic
    PDF+annotations while rmapi lasts.

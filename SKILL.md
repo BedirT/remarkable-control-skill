@@ -15,7 +15,7 @@ Zero-interruption autonomy for reMarkable 2 (1404×1872) over USB. No cloud pair
 ## Quick connect
 
 ```sh
-scripts/rm-ssh.sh true   # USB, user root; expect exit 0 with key auth (see 01)
+scripts/rm2ctrl-ssh.sh true   # USB, user root; expect exit 0 with key auth (see 01)
 # or raw ssh with the same fail-fast flags the wrapper uses:
 # ssh -n -o BatchMode=yes -o ConnectTimeout=5 -o PasswordAuthentication=no \
 #   -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa root@10.11.99.1 true
@@ -29,7 +29,7 @@ Your key lives in `/home/root/.ssh/authorized_keys` on the tablet (on `/home`, s
 2. **Act**: one input (`rm2ctrl tap` / `rm2ctrl swipe`, [03](references/03-input-automation.md) §5; SVG line art via `rm2ctrl draw --run`) or file op ([04](references/04-files-content.md)); know the screen map ([05](references/05-ui-ux-map.md)). `rm2ctrl ssh -- <cmd>` runs a raw tablet command (ssh options before host, remote command after; use `--` to separate; dangerous ssh options need `--allow-unsafe-ssh-opts`, see [01](references/01-access-auth.md)).
 3. **Verify**: re-screenshot; e-ink needs 0.5–1.0 s settle after input. Never verify by forcing a refresh.
 
- Timeouts: 2 s fail-fast probe, 5 s bulk-transfer default, `scripts/rm-ssh.sh`
+ Timeouts: 2 s fail-fast probe, 5 s bulk-transfer default, `scripts/rm2ctrl-ssh.sh`
  honors `RM_CONNECT_TIMEOUT` (integer 1..30, default 5), so the 2 s probe needs `RM_CONNECT_TIMEOUT=2` or raw ssh/config. Tool choice: [06](references/06-tooling-ecosystem.md); loop discipline: [07](references/07-autonomy-loop.md).
 
 ## Draw with the pen (working feature)
@@ -54,7 +54,7 @@ otherwise strokes fail silently (full detail: [03](references/03-input-automatio
 |---|---|---|
 | 01 | [access & auth](references/01-access-auth.md) | USB/WiFi SSH, keys, password paths, Web UI, pairing avoidance |
 | 02 | [display & screenshot](references/02-display-screenshot.md) | 1404×1872 specs, capture method, fallback paths |
-| 03 | [input automation](references/03-input-automation.md) | tap/swipe/pen via /tmp/rm-input helper + SVG drawing (keys unimplemented) |
+| 03 | [input automation](references/03-input-automation.md) | tap/swipe/pen via /tmp/rm2ctrl-input helper + SVG drawing (keys unimplemented) |
 | 04 | [files & content](references/04-files-content.md) | xochitl tree, USB endpoints, rmapi, cloud/rmfakecloud |
 | 05 | [UI/UX map](references/05-ui-ux-map.md) | screens, gestures, toolbar, states |
 | 06 | [tooling ecosystem](references/06-tooling-ecosystem.md) | capture/sync tool comparison |

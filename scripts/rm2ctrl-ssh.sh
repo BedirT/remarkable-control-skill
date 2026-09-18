@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# rm-ssh.sh — key-based SSH wrapper for reMarkable 2 (USB default).
-# Usage: rm-ssh.sh [--help] [--dry-run] [--allow-unsafe-ssh-opts] [ssh-options] [--] [remote-command...]
+# rm2ctrl-ssh.sh — key-based SSH wrapper for reMarkable 2 (USB default).
+# Usage: rm2ctrl-ssh.sh [--help] [--dry-run] [--allow-unsafe-ssh-opts] [ssh-options] [--] [remote-command...]
 # Env: RM_HOST (default root@10.11.99.1), RM_KEY (default ~/.ssh/id_rsa_remarkable)
 # Notes:
 #   - No eval. SSH options go before HOST, remote command goes after HOST.
 #   - Leading "-p/-o/..." args are treated as ssh options; the rest is the
 #     remote command. Use "--" to separate explicitly, e.g.:
-#       rm-ssh.sh -p 2222 -- true
-#       rm-ssh.sh -- -h   # remote command starting with a dash
+#       rm2ctrl-ssh.sh -p 2222 -- true
+#       rm2ctrl-ssh.sh -- -h   # remote command starting with a dash
 #   - Non-interactive: ssh runs with -n, so the remote command never
 #     reads the caller's stdin (a slow pipe cannot hang the wrapper).
 set -euo pipefail
@@ -26,7 +26,7 @@ usage() {
   HOST_ONLY=${HOST_ONLY//[$_C1_CTRL]/}
   # Pure builtins (no cat): --help must work with an empty PATH.
   while IFS= read -r _line; do printf '%s\n' "$_line"; done <<EOF
-Usage: rm-ssh.sh [OPTIONS] [--] [ssh-options] [remote-command...]
+Usage: rm2ctrl-ssh.sh [OPTIONS] [--] [ssh-options] [remote-command...]
 
 Key-based SSH wrapper for reMarkable 2. Fails fast, never prompts.
 
@@ -67,7 +67,7 @@ Notes:
   - Non-interactive: stdin is detached (ssh -n), so the remote command
     never reads your terminal input.
   - Single-dash options pass through to ssh: -h shows ssh's help (not
-    this help), -v traces, etc. Options end at --: \`rm-ssh.sh -- -h\`
+    this help), -v traces, etc. Options end at --: \`rm2ctrl-ssh.sh -- -h\`
     runs -h on the tablet instead.
   - OS updates regenerate the tablet host key: if verification fails,
     remove the stale entry for the bare host (no user@, no suffix),
@@ -76,11 +76,11 @@ Notes:
     Never use StrictHostKeyChecking=no to work around this.
 
 Examples:
-  rm-ssh.sh true
-  rm-ssh.sh -- systemctl stop xochitl
-  rm-ssh.sh -p 2222 -- true
-  rm-ssh.sh -vp 2222 -- true (bundles expand ssh-style: -v -p 2222)
-  rm-ssh.sh --dry-run -- cat /sys/devices/soc0/machine
+  rm2ctrl-ssh.sh true
+  rm2ctrl-ssh.sh -- systemctl stop xochitl
+  rm2ctrl-ssh.sh -p 2222 -- true
+  rm2ctrl-ssh.sh -vp 2222 -- true (bundles expand ssh-style: -v -p 2222)
+  rm2ctrl-ssh.sh --dry-run -- cat /sys/devices/soc0/machine
 EOF
 }
 

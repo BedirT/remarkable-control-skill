@@ -7,12 +7,12 @@ never reuse rM2 node names, paths, or coordinate maxima there.
  `remarkable.guide/devel/device/input.html`, svenar hexdump captures,
  oxide#48 node mapping, oxide `inject_evdev` + `evdevdevice` precedents,
  python-evdev / libevdev docs — plus LIVE EVIDENCE 2026-09-17: static ARM
- helper `scripts/rm-input/` driving taps and swipes on-device, every act
+ helper `scripts/rm2ctrl-input/` driving taps and swipes on-device, every act
  screenshot-verified (tile open, X close, grid scroll + byte-exact
  restore). Tap + swipe: WORKING. Pen stroke: WORKING (§5b–§5d, SVG via
- scripts/rm-svg.py). KEY_POWER: not implemented.
+ scripts/rm2ctrl-svg.py). KEY_POWER: not implemented.
 
- ## 1. Device mapping (rM2) — probed live 2026-09-17 (`rm-input --probe`)
+ ## 1. Device mapping (rM2) — probed live 2026-09-17 (`rm2ctrl-input --probe`)
 
  | Node | Name | Function |
  |---|---|---|
@@ -33,7 +33,7 @@ addresses). Rediscover via §2, do not reuse the by-path strings above.
  # Confirm hardware generation:
  cat /sys/devices/soc0/machine   # expect: reMarkable 2.0
  # Full caps + axis ranges, no tablet-side packages (static helper):
- /tmp/rm-input --probe
+ /tmp/rm2ctrl-input --probe
  ```
 
  Live `--probe` output (fw 20260827113527 — the touchscreen block is the
@@ -79,7 +79,7 @@ Event: time ..., type 3 (EV_ABS), code 54 (ABS_MT_POSITION_Y), value 800
 Event: time ..., type 0 (EV_SYN), code 0 (SYN_REPORT), value 0
 ```
 
- Get axis minima/maxima from `/tmp/rm-input --probe` (§2 dump above) —
+ Get axis minima/maxima from `/tmp/rm2ctrl-input --probe` (§2 dump above) —
  no evtest on stock firmware. Touch X/Y map to screen pixels (§4 Y flip);
  pen X/Y are Wacom digitizer units (5-digit) and need scaling (§4).
 
@@ -138,7 +138,7 @@ py = raw_y * 1872 // y_max   # maxima from EVIOCGABS / evtest caps
  ## 5. Injection — static helper over uinput (WORKING, verified 2026-09-17)
 
  Writing bytes to `/dev/input/eventN` does NOT inject (read-only from an
- app's view). The supported path is `scripts/rm-input/`: a small Rust
+ app's view). The supported path is `scripts/rm2ctrl-input/`: a small Rust
  helper, statically linked for ARMv7 (`armv7-unknown-linux-musleabihf`),
  no tablet-side packages — stock firmware has no Python, no evtest, no
  `sendevent`. It creates a `/dev/uinput` virtual device cloning the real
@@ -153,13 +153,13 @@ py = raw_y * 1872 // y_max   # maxima from EVIOCGABS / evtest caps
 
  ```sh
  # First use: copy it over (nothing installed, lives in /tmp):
- scp scripts/rm-input/rm-input root@10.11.99.1:/tmp/rm-input
- scripts/rm-ssh.sh -- chmod +x /tmp/rm-input
+ scp scripts/rm2ctrl-input/rm2ctrl-input root@10.11.99.1:/tmp/rm2ctrl-input
+ scripts/rm2ctrl-ssh.sh -- chmod +x /tmp/rm2ctrl-input
  # Then drive it (1 s sleep covers the e-ink settle before verifying):
- scripts/rm-ssh.sh -- /tmp/rm-input tap 513 1176; sleep 1
- scripts/rm-ssh.sh -- /tmp/rm-input swipe 700 1300 700 700 24 12; sleep 1
- scripts/rm-ssh.sh -- /tmp/rm-input --probe    # on-tablet caps dump
- scripts/rm-ssh.sh -- /tmp/rm-input replay     # verbatim owner finger pair
+ scripts/rm2ctrl-ssh.sh -- /tmp/rm2ctrl-input tap 513 1176; sleep 1
+ scripts/rm2ctrl-ssh.sh -- /tmp/rm2ctrl-input swipe 700 1300 700 700 24 12; sleep 1
+ scripts/rm2ctrl-ssh.sh -- /tmp/rm2ctrl-input --probe    # on-tablet caps dump
+ scripts/rm2ctrl-ssh.sh -- /tmp/rm2ctrl-input replay     # verbatim owner finger pair
  ```
 
  Finger replay (page creation, VERIFIED 2/2 2026-09-18): the owner's
@@ -192,16 +192,16 @@ py = raw_y * 1872 // y_max   # maxima from EVIOCGABS / evtest caps
  in [1, 200], STEP_MS in [0, 5000]. Fixed tracking IDs (42 tap /
  43 swipe, 601/602 replay) — no concurrent runs.
 
- Rebuild the helper (prebuilt binary ships at `scripts/rm-input/rm-input`):
+ Rebuild the helper (prebuilt binary ships at `scripts/rm2ctrl-input/rm2ctrl-input`):
 
  ```sh
- cd scripts/rm-input
+ cd scripts/rm2ctrl-input
  RUSTFLAGS="-C link-self-contained=yes -C linker=rust-lld" \
    cargo build --target armv7-unknown-linux-musleabihf
  ```
 
  Live ink path is the `pend` daemon (§5b): one held pen node,
- strokes via `/tmp/pen.fifo`, SVG via `scripts/rm-svg.py --run`
+ strokes via `/tmp/pen.fifo`, SVG via `scripts/rm2ctrl-svg.py --run`
  (`--skip-class/--skip-fill` drops background silhouettes — filled
  shapes draw as outlines, so skip invisible fills or their contours
  tangle the drawing; proven on a real logo, outline-faithful).
@@ -244,7 +244,7 @@ py = raw_y * 1872 // y_max   # maxima from EVIOCGABS / evtest caps
 
  Session recipe (needs one xochitl restart; real pen is dead while
  the override points at the clone — restore promptly):
- `setsid nohup /tmp/rm-input pend … &`, note its eventN,
+ `setsid nohup /tmp/rm2ctrl-input pend … &`, note its eventN,
  `systemctl set-environment XOCHITL_DIGITIZER_PATH=/dev/input/eventN`,
  `systemctl restart xochitl`, verify `/proc/<pid>/fd` shows the
  node, draw, then `systemctl unset-environment
@@ -301,7 +301,7 @@ page, draw one smoke line and measure ink before trusting the path.
 Detection when strokes stop landing: `journalctl | grep
 "Could not read"` — if present, the device cycle above is the fix.
 Build note: file tooling writes future mtimes, cargo then calls
-the crate fresh when it is not — always `cargo clean -p rm-input`
+the crate fresh when it is not — always `cargo clean -p rm2ctrl-input`
 before the ARM build or you stage a stale binary.
 
 ## 6. xochitl coexistence
@@ -327,7 +327,7 @@ remap, but stop/grab is deterministic and autonomy-friendly.
 E-ink needs ~100–450 ms per refresh; ghosting lies. After every inject:
 
 1. Sleep 0.5–1.0 s after lift (swipe: after the final `SYN_REPORT`).
-2. Capture via `scripts/rm-capture.py --out verify.png` and confirm the expected UI
+2. Capture via `scripts/rm2ctrl-capture.py --out verify.png` and confirm the expected UI
    state from the PNG — never assume the tap landed, never force an
    e-ink refresh to "check".
 3. On mismatch: re-run discovery (§2), check orientation (§4), retry

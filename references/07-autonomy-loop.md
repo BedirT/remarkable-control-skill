@@ -11,7 +11,7 @@ step, screenshot-verify everything, fail fast and recover deterministically.
    pairing codes, no prompts. WiFi SSH is secondary; cloud pairing is
    out of the autonomous path entirely.
  2. **One action, then verify.** Every step is exactly one tap/swipe
-   (`/tmp/rm-input` over SSH, 03 §5) or one file operation, followed by
+   (`/tmp/rm2ctrl-input` over SSH, 03 §5) or one file operation, followed by
    a fresh screenshot plus a byte-level check. Never chain speculative
    actions.
 3. **Fail fast, recover by table.** SSH probes, capture, and injection
@@ -24,7 +24,7 @@ step, screenshot-verify everything, fail fast and recover deterministically.
 ## 2. Preconditions (run once per session)
 
 Timeouts are intentional: 2 s for the fail-fast probe, 5 s default for
-bulk transfer. `scripts/rm-ssh.sh` honors `RM_CONNECT_TIMEOUT` (integer 1..30, default 5); `scripts/rm-capture.py` takes `--timeout` — the 2 s probe needs `--timeout 2` / `RM_CONNECT_TIMEOUT=2` or raw ssh/config.
+bulk transfer. `scripts/rm2ctrl-ssh.sh` honors `RM_CONNECT_TIMEOUT` (integer 1..30, default 5); `scripts/rm2ctrl-capture.py` takes `--timeout` — the 2 s probe needs `--timeout 2` / `RM_CONNECT_TIMEOUT=2` or raw ssh/config.
 
 ```sh
 # key auth, no prompts, short timeouts, detached stdin
@@ -69,7 +69,7 @@ Then every autonomous command is `ssh remarkable …` / `scp … :
 
 ```
 ┌─────────────────────────────────────────────────┐
-│ OBSERVE: scripts/rm-capture.py → PNG+raw        │
+│ OBSERVE: scripts/rm2ctrl-capture.py → PNG+raw        │
 │   --out verify.png (+ screen.raw 10513152 B)     │
 │   (02 §2; on failure 02 §3)                      │
 │          │                                      │
@@ -78,7 +78,7 @@ Then every autonomous command is `ssh remarkable …` / `scp … :
 │      /download/{guid}/pdf, or ssh+rsync         │
 │      (stop xochitl before tree writes)          │
  │   b) input: one tap / swipe via                 │
- │      /tmp/rm-input over SSH (03 §5)             │
+ │      /tmp/rm2ctrl-input over SSH (03 §5)             │
 │          │                                      │
 │ VERIFY: re-capture → PNG + raw; expect          │
 │   10513152 B raw (02 §2); diff against          │
@@ -91,15 +91,15 @@ Then every autonomous command is `ssh remarkable …` / `scp … :
 Concrete verify example:
 
 ```sh
-python3 scripts/rm-capture.py --out verify.png      # + verify.raw
+python3 scripts/rm2ctrl-capture.py --out verify.png      # + verify.raw
 ls -l verify.raw  # expect 10513152 bytes (1404*1872*4, 32-bit path)
 ```
 
 Rules:
 
-- Always capture to a **file** — never `ffplay`-only in autonomy; there is no human watching. Re-running `scripts/rm-capture.py` to the same paths needs `--force`.
+- Always capture to a **file** — never `ffplay`-only in autonomy; there is no human watching. Re-running `scripts/rm2ctrl-capture.py` to the same paths needs `--force`.
 - Always `trap` cleanup: close the injector / kill any viewer on exit.
-- Capture with `scripts/rm-capture.py --out verify.png` (02 §2); on failure see 02 §3.
+- Capture with `scripts/rm2ctrl-capture.py --out verify.png` (02 §2); on failure see 02 §3.
 - For file uploads, `GET` the target folder listing FIRST — `POST
   /upload` lands in the last-listed folder (with `Origin:
   http://10.11.99.1` header).
@@ -162,14 +162,14 @@ SSH="ssh -n -o BatchMode=yes -o ConnectTimeout=2 -o PasswordAuthentication=no \
   -o PubkeyAcceptedKeyTypes=+ssh-rsa -o HostKeyAlgorithms=+ssh-rsa root@10.11.99.1"
 $SSH true                                           # fail-fast probe
 $SSH cat /sys/devices/soc0/machine                  # expect reMarkable 2.0
-python3 scripts/rm-capture.py --out before.png        # observe (~5 s, + before.raw)
+python3 scripts/rm2ctrl-capture.py --out before.png        # observe (~5 s, + before.raw)
 ls -l before.raw                                    # expect 10513152 bytes
 # ... exactly one act (file op or single injection) ...
 sleep 1                                             # e-ink settle
-python3 scripts/rm-capture.py --out after.png         # verify
+python3 scripts/rm2ctrl-capture.py --out after.png         # verify
 ls -l after.raw                                     # expect 10513152 bytes
 ```
 
 Old capture rows don't apply on this firmware — the OBSERVE
-step above is `scripts/rm-capture.py` (02 §2, no tablet step). Paper Pro:
+step above is `scripts/rm2ctrl-capture.py` (02 §2, no tablet step). Paper Pro:
 ScreenShare + Developer Mode + `rm-ssh-over-wlan on` prerequisites.

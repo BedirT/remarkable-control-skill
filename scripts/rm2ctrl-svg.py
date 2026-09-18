@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""rm-svg.py, SVG line art to reMarkable pen strokes.
+"""rm2ctrl-svg.py, SVG line art to reMarkable pen strokes.
 
 Parses <path>/<polyline>/<polygon> from an SVG file, fits the drawing
 into a canvas rectangle, and emits one FIFO `S` stroke line per
@@ -9,9 +9,9 @@ new stroke (pen lift between subpaths). A (arc) is skipped with a
 stderr warning.
 
 Usage:
-    python3 scripts/rm-svg.py drawing.svg [--box X Y W H] [--press A[:B]]
+    python3 scripts/rm2ctrl-svg.py drawing.svg [--box X Y W H] [--press A[:B]]
     [--speed 1-5] [--skip-class NAME] [--skip-fill COLOR]
-    python3 scripts/rm-svg.py drawing.svg --run [--box ...] [--press ...]
+    python3 scripts/rm2ctrl-svg.py drawing.svg --run [--box ...] [--press ...]
 
 --run feeds each stroke to the `pend` daemon's /tmp/pen.fifo over the
 existing USB SSH session (otherwise lines print to stdout). Needs the
@@ -31,7 +31,7 @@ import xml.etree.ElementTree as ET
 
 SCREEN_W, SCREEN_H = 1404, 1872
 SSH = [os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                    "rm-ssh.sh"), "--"]
+                    "rm2ctrl-ssh.sh"), "--"]
 # Named pen paces: (px per frame, ms per frame). 2 is the default.
 # 1 careful ~50 px/s; 2 tracing ~125 px/s (proven: ~1 px path error);
 # 3 steady ~300 px/s; 4 quick ~800 px/s; 5 device pace, cuts corners.

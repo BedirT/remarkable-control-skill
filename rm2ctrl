@@ -23,8 +23,8 @@ VERSION = "0.1.0"
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS = os.path.join(ROOT, "scripts")
-SSH = os.path.join(SCRIPTS, "rm-ssh.sh")
-REMOTE_INPUT = "/tmp/rm-input"
+SSH = os.path.join(SCRIPTS, "rm2ctrl-ssh.sh")
+REMOTE_INPUT = "/tmp/rm2ctrl-input"
 
 W, H = 1404, 1872
 
@@ -99,7 +99,7 @@ def cmd_swipe(args):
 
 
 def cmd_shot(args):
-    cap = load("rm_capture", "rm-capture.py")
+    cap = load("rm2ctrl_capture", "rm2ctrl-capture.py")
     argv = conn_flags(args)
     if args.out:
         argv += ["--out", args.out]
@@ -113,7 +113,7 @@ def cmd_shot(args):
 
 
 def cmd_draw(args):
-    svg = load("rm_svg", "rm-svg.py")
+    svg = load("rm_svg", "rm2ctrl-svg.py")
     argv = [args.file]
     if args.box:
         argv += ["--box"] + [str(v) for v in args.box]

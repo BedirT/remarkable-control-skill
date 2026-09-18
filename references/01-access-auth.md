@@ -52,7 +52,7 @@ host remarkable
   PasswordAuthentication no
 ```
 
-`scripts/rm-capture.py` (`--timeout`, integer 1..30, default 5) and `scripts/rm-ssh.sh` (`RM_CONNECT_TIMEOUT`) fail fast; the 2 s fail-fast probe needs `--timeout 2` / `RM_CONNECT_TIMEOUT=2` or raw ssh/config.
+`scripts/rm2ctrl-capture.py` (`--timeout`, integer 1..30, default 5) and `scripts/rm2ctrl-ssh.sh` (`RM_CONNECT_TIMEOUT`) fail fast; the 2 s fail-fast probe needs `--timeout 2` / `RM_CONNECT_TIMEOUT=2` or raw ssh/config.
 
 If you see `no matching host key type … Their offer: ssh-rsa` (OpenSSH ≥ 8.8 vs Dropbear), append:
 
@@ -63,7 +63,7 @@ If you see `no matching host key type … Their offer: ssh-rsa` (OpenSSH ≥ 8.8
 
 Then `ssh remarkable`. Keys live on `/home`, so they survive OS updates (only the root partition is replaced). The host key regenerates on update — delete the stale `known_hosts` entry for the bare IP (`ssh-keygen -R 10.11.99.1`, never `StrictHostKeyChecking=no`), verify the new fingerprint over USB before trusting it over WiFi, and re-accept.
 
-Wrapper gate (`scripts/rm-ssh.sh`): dangerous ssh options are rejected (exit 2) unless `--allow-unsafe-ssh-opts` is passed, in which case they pass through with a stderr warning. Denied: `-F -J -L -R -D -W -S -E -A -X -Y -w -I -B` (bundled flags are scanned — e.g. `-AX` is denied) and `-o` values setting `ProxyCommand`, `LocalCommand`, `PermitLocalCommand`, `ForwardAgent`, `LocalForward`, `RemoteForward`, `DynamicForward`, `ProxyJump`, `IdentityAgent`, `PKCS11Provider`, `SecurityKeyProvider`, `ForwardX11`, `ForwardX11Trusted`, `Tunnel`, destination: `Hostname`, `Port` (`-p` stays the sanctioned port flag), verification: `StrictHostKeyChecking`, `UserKnownHostsFile`, `GlobalKnownHostsFile`, `KnownHostsCommand`, multiplex: `ControlMaster`, `ControlPath`, `ControlPersist`, `StreamLocalBindUnlink`, in both `-o Key=Val` and `-oKey=Val` forms; `-o` key matching is case-insensitive. Probe it without a device: `rm-ssh.sh --dry-run -o ProxyCommand=evil -- true` (expect exit 2).
+Wrapper gate (`scripts/rm2ctrl-ssh.sh`): dangerous ssh options are rejected (exit 2) unless `--allow-unsafe-ssh-opts` is passed, in which case they pass through with a stderr warning. Denied: `-F -J -L -R -D -W -S -E -A -X -Y -w -I -B` (bundled flags are scanned — e.g. `-AX` is denied) and `-o` values setting `ProxyCommand`, `LocalCommand`, `PermitLocalCommand`, `ForwardAgent`, `LocalForward`, `RemoteForward`, `DynamicForward`, `ProxyJump`, `IdentityAgent`, `PKCS11Provider`, `SecurityKeyProvider`, `ForwardX11`, `ForwardX11Trusted`, `Tunnel`, destination: `Hostname`, `Port` (`-p` stays the sanctioned port flag), verification: `StrictHostKeyChecking`, `UserKnownHostsFile`, `GlobalKnownHostsFile`, `KnownHostsCommand`, multiplex: `ControlMaster`, `ControlPath`, `ControlPersist`, `StreamLocalBindUnlink`, in both `-o Key=Val` and `-oKey=Val` forms; `-o` key matching is case-insensitive. Probe it without a device: `rm2ctrl-ssh.sh --dry-run -o ProxyCommand=evil -- true` (expect exit 2).
 
 Config files still apply: the wrappers pass no `-F`, so `~/.ssh/config` (and `/etc/ssh/ssh_config`) merge into every connection — including directives the CLI gate rejects (`ProxyCommand`, `LocalForward`, …). Pinned CLI flags (`BatchMode`, `ConnectTimeout`, `PasswordAuthentication`, `HostKeyAlgorithms`, `PubkeyAcceptedKeyTypes`) win over config, but `--dry-run` cannot reveal config-smuggled directives — when behavior surprises, audit with `ssh -G <host>` and check `Host *` stanzas first.
 

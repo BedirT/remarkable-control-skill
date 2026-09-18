@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""rm-capture.py -- headless screen capture from reMarkable 2 over USB SSH.
+"""rm2ctrl-capture.py -- headless screen capture from reMarkable 2 over USB SSH.
 
 Read-only. No taps, refresh, uploads, ptrace, signals, or tablet changes.
 Fixed addresses are gated on the proven firmware build (/etc/version plus
@@ -10,12 +10,12 @@ Method (proven 2026-09-16): xochitl's EPFramebufferCarta1000 singleton
 allocation sits in an ordinary readable mapping and is transferred with
 one page-aligned raw dd over the existing SSH stdout.
 
-Usage: scripts/rm-capture.py [--out screen.png] [--raw frame.raw] [--force]
+Usage: scripts/rm2ctrl-capture.py [--out screen.png] [--raw frame.raw] [--force]
        [--host HOST] [--key PATH] [--timeout SECS]
-       scripts/rm-capture.py --dry-run | --help
+       scripts/rm2ctrl-capture.py --dry-run | --help
 Env: RM_HOST, RM_KEY, RM_CONNECT_TIMEOUT (flags override env; honored by
-scripts/rm-ssh.sh).
-Must run from the skill root (uses ./scripts/rm-ssh.sh).
+scripts/rm2ctrl-ssh.sh).
+Must run from the skill root (uses ./scripts/rm2ctrl-ssh.sh).
 """
 import os
 import struct
@@ -46,7 +46,7 @@ BYTE_CAP = 12 * 1024 * 1024
 DEADLINE = 60.0
 
 SSH = [os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                    "rm-ssh.sh")]
+                    "rm2ctrl-ssh.sh")]
 _first_probe = True
 
 

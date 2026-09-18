@@ -51,7 +51,7 @@ rm2ctrl shot --out verify.png   # prove the tap landed
 First tablet use also needs the tiny input helper on the device:
 
 ```sh
-scp scripts/rm-input/rm-input root@10.11.99.1:/tmp/rm-input
+scp scripts/rm2ctrl-input/rm2ctrl-input root@10.11.99.1:/tmp/rm2ctrl-input
 ```
 
 | Command | What it does |
@@ -109,7 +109,7 @@ rm2ctrl + CLI.md                control CLI (tap/swipe/shot/draw/ssh) + command 
 SKILL.md                        thin router: connect, loop, safety
 references/                     01 access & auth, 02 display & screenshot, 03 input,
                                 04 files & content, 05 UI/UX map, 06 tooling, 07 autonomy loop
-scripts/                        rm-capture.py, rm-svg.py, rm-ssh.sh, rm-input/ (Rust helper)
+scripts/                        rm2ctrl-capture.py, rm2ctrl-svg.py, rm2ctrl-ssh.sh, rm2ctrl-input/ (Rust helper)
 tests/                          host-only suite, incl. test_rm2ctrl.py (no tablet needed)
 ```
 

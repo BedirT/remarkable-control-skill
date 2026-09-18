@@ -6,7 +6,7 @@ uncertain items are marked `[INFERENCE]` or `[MED]` (medium confidence —
 confirm on-device before pixel-driving).
 
 Paper Pro deltas are flagged inline and **never mixed** into rM2 procedures.
- > Evidence 2026-09-17/18: taps + swipes WORKING via `/tmp/rm-input`
+ > Evidence 2026-09-17/18: taps + swipes WORKING via `/tmp/rm2ctrl-input`
  > over SSH (static helper, screen coords, Y flip internal), ~50 acts
  > every one screenshot-verified.
  > VERIFIED: home map (multi-scroll); tile tap opens doc at last-viewed

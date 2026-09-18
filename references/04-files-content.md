@@ -28,7 +28,7 @@ Paper Pro.
 ## 2. Deterministic ssh+rsync recipe (preferred for autonomy)
 
 Always stop xochitl before writing the tree; restart after. Transport:
-`root@10.11.99.1` over USB (key auth — see `scripts/rm-ssh.sh`).
+`root@10.11.99.1` over USB (key auth — see `scripts/rm2ctrl-ssh.sh`).
 
 ```sh
 ssh -n -o BatchMode=yes -o ConnectTimeout=5 -o PasswordAuthentication=no -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa root@10.11.99.1 "systemctl stop xochitl"

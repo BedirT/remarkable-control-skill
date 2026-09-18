@@ -1,8 +1,8 @@
 # `rm2ctrl`, reMarkable 2 control CLI
 
 One command drives the tablet over USB SSH. It wraps the skill's
-scripts (`scripts/rm-capture.py`, `scripts/rm-svg.py`,
-`scripts/rm-ssh.sh`, tablet-side `/tmp/rm-input`) with stable flags,
+scripts (`scripts/rm2ctrl-capture.py`, `scripts/rm2ctrl-svg.py`,
+`scripts/rm2ctrl-ssh.sh`, tablet-side `/tmp/rm2ctrl-input`) with stable flags,
 so agents learn one tool instead of five scripts. The skill
 ([SKILL.md](SKILL.md)) stays the brain: it teaches *when* to run what
 and how to verify. `rm2ctrl` is the hands.
@@ -22,7 +22,7 @@ reMarkable 2 with key auth (see `references/01-access-auth.md`).
 First tablet use also needs the input helper on the device:
 
 ```sh
-scp scripts/rm-input/rm-input root@10.11.99.1:/tmp/rm-input
+scp scripts/rm2ctrl-input/rm2ctrl-input root@10.11.99.1:/tmp/rm2ctrl-input
 ```
 
 ## Connection flags (every subcommand)

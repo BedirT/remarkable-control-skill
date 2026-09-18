@@ -1,4 +1,4 @@
-// rm-input: uinput finger injector for reMarkable 2 (Type-B MT).
+// rm2ctrl-input: uinput finger injector for reMarkable 2 (Type-B MT).
 //
 // Runs from /tmp over the existing SSH session. No tablet install, no
 // Python, no daemon: one shot per invocation, device destroyed on exit.
@@ -248,7 +248,7 @@ struct AbsInfo {
 }
 
 fn die(msg: &str) -> ! {
-    eprintln!("rm-input: {}", msg);
+    eprintln!("rm2ctrl-input: {}", msg);
     exit(1);
 }
 
@@ -1030,7 +1030,7 @@ fn main() {
         return;
     }
 
-    eprintln!("usage: rm-input --probe | tap X Y | swipe X1 Y1 X2 Y2 [STEPS=24] [STEP_MS=12] | replay [FILE] | pen X1 Y1 X2 Y2 [STEPS=24] [STEP_MS=12] [PRESS=1500] | penraw DX1 DY1 DX2 DY2 ... | pend (FIFO: S STEPS STEP_MS P0 P1 X1 Y1 ...)");
+    eprintln!("usage: rm2ctrl-input --probe | tap X Y | swipe X1 Y1 X2 Y2 [STEPS=24] [STEP_MS=12] | replay [FILE] | pen X1 Y1 X2 Y2 [STEPS=24] [STEP_MS=12] [PRESS=1500] | penraw DX1 DY1 DX2 DY2 ... | pend (FIFO: S STEPS STEP_MS P0 P1 X1 Y1 ...)");
     eprintln!("coords are SCREEN pixels (1404x1872 portrait); Y flip applied internally; replay is device coords");
     exit(2);
 }
