@@ -42,3 +42,34 @@ def test_shot_dry_run_needs_no_device(capsys):
 def test_ssh_without_command_is_usage_error(capsys):
     assert rm2ctrl.main(["ssh"]) == 2
     capsys.readouterr()
+
+def test_shot_strict_dry_run_needs_no_device(capsys):
+    assert rm2ctrl.main(["shot", "--strict", "--dry-run"]) == 0
+    capsys.readouterr()
+
+
+def test_live_status_and_shot_without_daemon_need_no_device(tmp_path, capsys):
+    d = str(tmp_path / "feed")
+    assert rm2ctrl.main(["live", "status", "--dir", d]) == 1
+    capsys.readouterr()
+    assert rm2ctrl.main(["live", "shot", "--out", str(tmp_path / "s.png"),
+                         "--dir", d]) == 1
+    capsys.readouterr()
+
+
+def test_live_shot_copies_local_frame_without_ssh(tmp_path):
+    import json
+    import os
+    import time
+    live = rm2ctrl.load("rm2ctrl_live", "rm2ctrl-live.py")
+    d = tmp_path / "feed"
+    d.mkdir()
+    (d / "latest.png").write_bytes(b"FRAME")
+    (d / "latest.raw").write_bytes(b"RAW")
+    with open(d / "daemon.pid", "w") as f:
+        f.write(str(os.getpid()))
+    with open(d / "meta.json", "w") as f:
+        json.dump({"seq": 7, "time": time.time(), "interval": 2}, f)
+    out = str(tmp_path / "s.png")
+    assert live.main(["shot", "--dir", str(d), "--out", out]) == 0
+    assert open(out, "rb").read() == b"FRAME"

@@ -10,17 +10,25 @@ Capture is read-only and safe to poll. Never force an e-ink refresh to verify �
 ## 2. Capture: `scripts/rm2ctrl-capture.py` (proven live 2026-09-16, fw 20260827113527)
 
 ```sh
-scripts/rm2ctrl-capture.py --out screen.png   # ~5 s, writes screen.png + screen.raw
+rm2ctrl shot --out screen.png            # fast default: single check, ~3 SSH ops
+rm2ctrl shot --strict --out screen.png   # backup: full hashes + rechecks, ~17 SSH ops, ~8 s
+rm2ctrl live start                       # feed daemon, captures every ~2 s
+rm2ctrl live shot --out screen.png       # instant local copy, no SSH
 ```
 
 xochitl's EPFramebufferCarta1000 singleton (static `0x1517084`) owns an inherited 1404×1872 RGB32 QImage; the pixel allocation sits in an ordinary readable mapping. No tablet-side setup, taps, refresh, uploads, ptrace, or signals.
 
-Chain: pidof xochitl → static → vptr must equal `0x120f738` (Carta1000) → 28-byte image pair at +88 → image A header `1404×1872 fmt=4 bpl=5616`. Then: 10,513,152-byte extent inside ONE `rw-p` mapping (never `/dev/fb0`) → 64-byte probe → one page-aligned raw `dd` (`bs=4096`) over `scripts/rm2ctrl-ssh.sh` stdout → slice → host PNG decode (B,G,R → RGB).
+Chain (both modes): pidof xochitl → static → vptr must equal `0x120f738` (Carta1000) → 28-byte image pair at +88 → image A header `1404×1872 fmt=4 bpl=5616`. Then: 10,513,152-byte extent inside ONE `rw-p` mapping (never `/dev/fb0`) → one page-aligned raw `dd` (`bs=4096`) over `scripts/rm2ctrl-ssh.sh` stdout → slice → host PNG decode (B,G,R → RGB).
 
-The static address, vptr, field offsets, and exe load bias are firmware-pinned constants, proven only on 20260827113527 — re-verify them after any update (re-derivation notes live outside the repo; ask the maintainer). `rm2ctrl-capture.py` enforces this itself (firmware + xochitl/QtGui hash check) and refuses unknown builds. Re-resolved every run: pid, helper pointer, pixel pointer.
+Fast mode (default): firmware + xochitl size gate, no sha256, batched metadata reads, no pre/post rechecks, no 64-byte probe. One snapshot, ~2 metadata SSH calls, one bulk transfer. SSH reuse is on by default (`RM_SSH_MUX=0` disables).
 
-Pre- and post-transfer rechecks (pid, exe mapping, static, vptr, pair, header) abort on any change; the recheck is not atomic, so one read is a candidate, not a verified current-panel image. Budgets: 12 MiB process-memory cap, 60 s deadline (30 SSH ops). Timed 2026-09-16, 3 back-to-back runs on fw 20260827113527: 8.3 s each — snapshot+hash gate 1.3 s, metadata+pre-recheck+probe 3.7 s, 10.5 MB bulk transfer 1.0 s, PNG encode 0.1 s, final recheck+publish 2.3 s. Byte-exact repeat: two back-to-back runs produced identical SHA-256. Tracking: a fresh pen stroke appeared in exactly its region on the next capture. Output PNG is 1404×1872 portrait directly — no transpose needed.
+Strict mode (`--strict`): firmware + size + xochitl/QtGui hash gate, plus pre- and post-transfer rechecks (pid, exe mapping, static, vptr, pair, header) that abort on any change; includes the 64-byte probe. The recheck is not atomic, so one read is a candidate, not a verified current-panel image.
 
+The static address, vptr, field offsets, and exe load bias are firmware-pinned constants, proven only on 20260827113527 — re-verify them after any update (re-derivation notes live outside the repo; ask the maintainer). Re-resolved every run: pid, helper pointer, pixel pointer.
+
+Live feed (`scripts/rm2ctrl-live.py` via `rm2ctrl live`): a host daemon loops the fast path every `--interval` seconds (default 2) into `/tmp/rm2ctrl-live/latest.png` (atomic replace) plus `meta.json` (seq, time, error). `live shot` copies that file locally. It warns on stale frames but still serves static pages; it never silently falls back to an 8 s capture and never serves a frame after the daemon died. Keep the feed for loops; keep one-time `shot` for cold starts.
+
+Budgets: 12 MiB process-memory cap, 60 s deadline (30 SSH ops). Timed 2026-09-16, 3 back-to-back strict runs on fw 20260827113527: 8.3 s each — snapshot+hash gate 1.3 s, metadata+pre-recheck+probe 3.7 s, 10.5 MB bulk transfer 1.0 s, PNG encode 0.1 s, final recheck+publish 2.3 s. Byte-exact repeat: two back-to-back runs produced identical SHA-256. Tracking: a fresh pen stroke appeared in exactly its region on the next capture. Output PNG is 1404×1872 portrait directly — no transpose needed.
 ## 3. If capture fails
 
 Strict (unattended) mode: stop. Report the ABORT line as the diagnostic.

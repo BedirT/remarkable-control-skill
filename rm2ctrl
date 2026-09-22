@@ -4,7 +4,11 @@
 Subcommands wrap the skill's scripts with stable flags so agents learn
 one tool instead of five scripts:
 
-    rm2ctrl shot                     take a screenshot (read-only)
+    rm2ctrl shot                     fast screenshot, single check (read-only)
+    rm2ctrl shot --strict             full-hash backup path (~8s, one-time)
+    rm2ctrl live start                start persistent feed daemon
+    rm2ctrl live shot --out s.png     instant local copy from feed
+    rm2ctrl live status / stop        feed health / stop
     rm2ctrl tap X Y                  finger tap, screen pixels (1404x1872)
     rm2ctrl swipe X1 Y1 X2 Y2        finger swipe, natural profile
     rm2ctrl draw FILE.svg --run      draw SVG line art with the pen
@@ -107,9 +111,24 @@ def cmd_shot(args):
         argv += ["--raw", args.raw]
     if args.force:
         argv += ["--force"]
+    if getattr(args, "strict", False):
+        argv += ["--strict"]
     if args.dry_run:
         argv += ["--dry-run"]
     return cap.main(argv)
+
+
+def cmd_live(args):
+    live = load("rm2ctrl_live", "rm2ctrl-live.py")
+    argv = [args.action]
+    if getattr(args, "dir", None):
+        argv += ["--dir", args.dir]
+    if getattr(args, "out", None):
+        argv += ["--out", args.out]
+    if getattr(args, "interval", None):
+        argv += ["--interval", str(args.interval)]
+    apply_conn(args)
+    return live.main(argv)
 
 
 def cmd_draw(args):
@@ -161,10 +180,22 @@ def build_parser():
     h.add_argument("--out", default="screen.png")
     h.add_argument("--raw", default=None)
     h.add_argument("--force", action="store_true")
+    h.add_argument("--strict", action="store_true",
+                   help="full hashes + pre/post rechecks (~8s backup path)")
     h.add_argument("--dry-run", action="store_true",
                    help="check the SSH path without capturing")
     h.set_defaults(func=cmd_shot)
 
+    lv = sub.add_parser("live", help="persistent feed for instant shots")
+    lv.add_argument("action", choices=["start", "shot", "status", "stop"],
+                    help="start daemon, copy latest frame, show health, stop")
+    lv.add_argument("--out", default="screen.png",
+                    help="output for `live shot`")
+    lv.add_argument("--dir", default=None,
+                    help="feed state dir (default /tmp/rm2ctrl-live)")
+    lv.add_argument("--interval", type=float, default=None,
+                    help="seconds between frames for `live start` (default 2)")
+    lv.set_defaults(func=cmd_live)
     d = sub.add_parser("draw", help="draw SVG line art with the pen")
     d.add_argument("file", help="SVG file to draw")
     d.add_argument("--box", nargs=4, type=int, default=None,

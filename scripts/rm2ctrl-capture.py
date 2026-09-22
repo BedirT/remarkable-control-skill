@@ -3,14 +3,18 @@
 
 Read-only. No taps, refresh, uploads, ptrace, signals, or tablet changes.
 Fixed addresses are gated on the proven firmware build (/etc/version plus
-xochitl/QtGui binary hashes); anything else aborts. Outputs are staged to
-temp files and published only after the post-transfer recheck passes.
+xochitl size; binary hashes only in --strict). Outputs are staged to
+temp files and published after capture (strict mode adds pre/post rechecks).
 Method (proven 2026-09-16): xochitl's EPFramebufferCarta1000 singleton
 (static 0x1517084) owns an inherited 1404x1872 RGB32 QImage; the pixel
 allocation sits in an ordinary readable mapping and is transferred with
 one page-aligned raw dd over the existing SSH stdout.
 
-Usage: scripts/rm2ctrl-capture.py [--out screen.png] [--raw frame.raw] [--force]
+Fast path (default): one snapshot without sha256, one batched metadata
+read, one bulk transfer. ~3 SSH ops on a reused link.
+Strict path (--strict): full hashes plus pre/post rechecks, ~17 SSH ops.
+
+Usage: scripts/rm2ctrl-capture.py [--out screen.png] [--raw frame.raw] [--force] [--strict]
        [--host HOST] [--key PATH] [--timeout SECS]
        scripts/rm2ctrl-capture.py --dry-run | --help
 Env: RM_HOST, RM_KEY, RM_CONNECT_TIMEOUT (flags override env; honored by
@@ -89,18 +93,28 @@ def ssh_text(argv, cap, timeout=None):
     return r.stdout
 
 
-def snapshot(cap):
-    out = ssh_text(SSH + ["--",
-                          "P=$(/bin/pidof xochitl); echo \"PID=$P\";"
-                          " echo \"STAT:\"; cat /proc/$P/stat;"
-                          " echo \"---FW---\"; cat /etc/version;"
-                          " stat -c %s /usr/bin/xochitl 2>/dev/null"
-                          " || wc -c < /usr/bin/xochitl;"
-                          " echo \"---MAPS---\"; cat /proc/$P/maps;"
-                          " echo \"---TOOLS---\";"
-                          " command -v dd od hexdump;"
-                          " echo \"---SUMS---\";"
-                          " sha256sum /usr/bin/xochitl " + QTGUI_PATH], cap)
+def snapshot(cap, verify_hashes=True):
+    if verify_hashes:
+        remote = ("P=$(/bin/pidof xochitl); echo \"PID=$P\";"
+                  " echo \"STAT:\"; cat /proc/$P/stat;"
+                  " echo \"---FW---\"; cat /etc/version;"
+                  " stat -c %s /usr/bin/xochitl 2>/dev/null"
+                  " || wc -c < /usr/bin/xochitl;"
+                  " echo \"---MAPS---\"; cat /proc/$P/maps;"
+                  " echo \"---TOOLS---\";"
+                  " command -v dd od hexdump;"
+                  " echo \"---SUMS---\";"
+                  " sha256sum /usr/bin/xochitl " + QTGUI_PATH)
+    else:
+        remote = ("P=$(/bin/pidof xochitl); echo \"PID=$P\";"
+                  " echo \"STAT:\"; cat /proc/$P/stat;"
+                  " echo \"---FW---\"; cat /etc/version;"
+                  " stat -c %s /usr/bin/xochitl 2>/dev/null"
+                  " || wc -c < /usr/bin/xochitl;"
+                  " echo \"---MAPS---\"; cat /proc/$P/maps;"
+                  " echo \"---TOOLS---\";"
+                  " command -v dd od hexdump")
+    out = ssh_text(SSH + ["--", remote], cap)
     pid = int(out.split("\n", 1)[0].split("PID=")[1])
     pre, _, post = out.split("\n", 1)[1].partition("---MAPS---")
     statpart, _, fwpart = pre.partition("---FW---")
@@ -120,15 +134,16 @@ def snapshot(cap):
                    % (fw, xosize, SUPPORTED_FW, SUPPORTED_XOCHITL_SIZE))
     maps_txt, _, tools_txt = post.partition("---TOOLS---")
     tools_txt, _, sums_txt = tools_txt.partition("---SUMS---")
-    sums = {}
-    for ln in sums_txt.splitlines():
-        p = ln.split()
-        if len(p) >= 2 and len(p[0]) == 64:
-            sums[p[1].rsplit("/", 1)[-1]] = p[0].lower()
-    if (sums.get("xochitl") != SUPPORTED_XOCHITL_SHA256
-            or sums.get("libQt6Gui.so.6") != SUPPORTED_QTGUI_SHA256):
-        raise Fail("unsupported build: binary hash mismatch "
-                   "(xochitl/QtGui differ from proven layout sources)")
+    if verify_hashes:
+        sums = {}
+        for ln in sums_txt.splitlines():
+            p = ln.split()
+            if len(p) >= 2 and len(p[0]) == 64:
+                sums[p[1].rsplit("/", 1)[-1]] = p[0].lower()
+        if (sums.get("xochitl") != SUPPORTED_XOCHITL_SHA256
+                or sums.get("libQt6Gui.so.6") != SUPPORTED_QTGUI_SHA256):
+            raise Fail("unsupported build: binary hash mismatch "
+                       "(xochitl/QtGui differ from proven layout sources)")
     found = set(ln.strip().rsplit("/", 1)[-1] for ln in tools_txt.split())
     if "hexdump" not in found:
         raise Fail("target tool missing: need hexdump"
@@ -189,6 +204,44 @@ def read_block(cap, pid, regions, tool, addr, size):
         raise Fail("short block read at 0x%x: got %d of %d hex chars; %s"
                    % (addr, len(blob), n * 8, err))
     return bytes.fromhex(blob)
+
+def read_blocks(cap, pid, regions, tool, reqs):
+    """Read several small blocks in one SSH call. Returns list of bytes."""
+    global _first_probe
+    for addr, size in reqs:
+        if addr % 4 or size % 4 or size <= 0:
+            raise Fail("unaligned block request")
+        if not covered(regions, addr, size):
+            raise Fail("block 0x%x+0x%x outside mappings" % (addr, size))
+        cap.charge(size)
+    cap.charge(0)
+    parts = []
+    for addr, size in reqs:
+        n = size // 4
+        parts.append(_block_pipe(pid, addr // 4, n) + "; echo \"---BLK---\"")
+    script = "; ".join(parts)
+    r = subprocess.run(SSH + ["--", script],
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                       text=True, timeout=cap.remaining())
+    err = r.stderr[-200:]
+    if r.returncode != 0:
+        raise Fail("block read rc=%d: %s" % (r.returncode, err))
+    if _first_probe:
+        _first_probe = False
+        print("transport tool=%s head=%r" % (tool, r.stdout[:120]))
+    chunks = r.stdout.split("---BLK---")
+    if len(chunks) < len(reqs):
+        raise Fail("short batched read: got %d of %d blocks; %s"
+                   % (len(chunks), len(reqs), err))
+    out = []
+    for (addr, size), chunk in zip(reqs, chunks):
+        n = size // 4
+        blob = "".join(chunk.split())[:n * 8]
+        if len(blob) != n * 8:
+            raise Fail("short block read at 0x%x: got %d of %d hex chars; %s"
+                       % (addr, len(blob), n * 8, err))
+        out.append(bytes.fromhex(blob))
+    return out
 
 
 def maps_line_for(maps_txt, addr):
@@ -279,25 +332,48 @@ def publish(tmp, final, force):
         raise Fail("%s exists (use --force)" % final)
     os.unlink(tmp)
 
-def capture(out_png, out_raw, force):
+def capture(out_png, out_raw, force, strict=False):
     cap = Cap()
-    ident, maps_txt, tool, regions, exeline = snapshot(cap)
+    ident, maps_txt, tool, regions, exeline = snapshot(
+        cap, verify_hashes=strict)
     pid = ident[0]
     print("pid=%d starttime=%d" % ident)
-    print("t+%.1fs snapshot+hash gate" % (time.time() - cap.t0))
-    helper = u32(read_block(cap, pid, regions, tool, STATIC, 4))
-    if helper == 0:
-        raise Fail("null helper pointer in static storage")
-    vptr = u32(read_block(cap, pid, regions, tool, helper, 4))
-    if vptr != CARTA_VPTR:
-        raise Fail("object type mismatch: got 0x%x want 0x%x"
-                   % (vptr, CARTA_VPTR))
-    print("helper=0x%x type OK (Carta1000)" % helper)
-    pair = read_block(cap, pid, regions, tool, helper + PAIR_OFF, PAIR_LEN)
-    dA = u32(pair, IMGA_OFF - PAIR_OFF + D_OFF)
-    if dA == 0:
-        raise Fail("image A null data")
-    hdr = read_block(cap, pid, regions, tool, dA, HDR_LEN)
+    print("t+%.1fs snapshot%s" % (time.time() - cap.t0,
+                                  "+hash gate" if strict else " (fast, no hash)"))
+    if strict:
+        helper = u32(read_block(cap, pid, regions, tool, STATIC, 4))
+        if helper == 0:
+            raise Fail("null helper pointer in static storage")
+        vptr = u32(read_block(cap, pid, regions, tool, helper, 4))
+        if vptr != CARTA_VPTR:
+            raise Fail("object type mismatch: got 0x%x want 0x%x"
+                       % (vptr, CARTA_VPTR))
+        print("helper=0x%x type OK (Carta1000)" % helper)
+        pair = read_block(cap, pid, regions, tool, helper + PAIR_OFF, PAIR_LEN)
+        dA = u32(pair, IMGA_OFF - PAIR_OFF + D_OFF)
+        if dA == 0:
+            raise Fail("image A null data")
+        hdr = read_block(cap, pid, regions, tool, dA, HDR_LEN)
+    else:
+        # Fast: one SSH call for static + vptr placeholder, then pair+header.
+        # vptr needs helper first, so batch in two steps: static, then the rest.
+        raw_helper = read_block(cap, pid, regions, tool, STATIC, 4)
+        helper = u32(raw_helper)
+        if helper == 0:
+            raise Fail("null helper pointer in static storage")
+        vptr_b, pair_b = read_blocks(cap, pid, regions, tool,
+                                     [(helper, 4),
+                                      (helper + PAIR_OFF, PAIR_LEN)])
+        vptr = u32(vptr_b)
+        if vptr != CARTA_VPTR:
+            raise Fail("object type mismatch: got 0x%x want 0x%x"
+                       % (vptr, CARTA_VPTR))
+        print("helper=0x%x type OK (Carta1000)" % helper)
+        pair = pair_b
+        dA = u32(pair, IMGA_OFF - PAIR_OFF + D_OFF)
+        if dA == 0:
+            raise Fail("image A null data")
+        hdr = read_block(cap, pid, regions, tool, dA, HDR_LEN)
     wdt, hgt = u32(hdr, W_OFF), u32(hdr, H_OFF)
     pix, fmt, bpl = u32(hdr, PIX_OFF), u32(hdr, FMT_OFF), u32(hdr, BPL_OFF)
     print("image A: %dx%d fmt=%d bpl=%d pix=0x%x" % (wdt, hgt, fmt, bpl,
@@ -311,10 +387,13 @@ def capture(out_png, out_raw, force):
         raise Fail("pixel extent not in one ordinary readable mapping: "
                    "%s" % line)
     print("extent %d bytes in: %s" % (FRAME_N, line))
-    recheck(cap, ident, helper, pair, dA, hdr, exeline)
-    read_block(cap, pid, regions, tool, pix, 64)
-    print("probe 64 bytes OK")
-    print("t+%.1fs metadata+recheck+probe" % (time.time() - cap.t0))
+    if strict:
+        recheck(cap, ident, helper, pair, dA, hdr, exeline)
+        read_block(cap, pid, regions, tool, pix, 64)
+        print("probe 64 bytes OK")
+        print("t+%.1fs metadata+recheck+probe" % (time.time() - cap.t0))
+    else:
+        print("t+%.1fs metadata (fast, single check)" % (time.time() - cap.t0))
     start = pix - pix % BS
     prefix = pix - start
     blocks = (prefix + FRAME_N + BS - 1) // BS
@@ -329,7 +408,8 @@ def capture(out_png, out_raw, force):
             f.write(frame)
         write_png(tmp_png, W, H, BPL, frame)
         print("t+%.1fs png encode" % (time.time() - cap.t0))
-        recheck(cap, ident, helper, pair, dA, hdr, exeline)
+        if strict:
+            recheck(cap, ident, helper, pair, dA, hdr, exeline)
         publish(tmp_raw, out_raw, force)
         publish(tmp_png, out_png, force)
     except BaseException:
@@ -344,7 +424,7 @@ def capture(out_png, out_raw, force):
 
 
 def main(argv):
-    out_png, out_raw, force = "screen.png", None, False
+    out_png, out_raw, force, strict = "screen.png", None, False, False
     host, key, timeout = None, None, None
     i = 0
     while i < len(argv):
@@ -353,12 +433,16 @@ def main(argv):
             print(__doc__)
             return 0
         if a == "--dry-run":
-            print("would: snapshot xochitl, read static 0x%x, verify "
-                  "Carta1000 vptr, read image pair+header, probe 64B, "
-                  "transfer %d bytes raw, write PNG" % (STATIC, FRAME_N))
+            print("would (fast): snapshot xochitl (fw+size, no hash), batched "
+                  "static/vptr/pair+header in 2 SSH calls, "
+                  "transfer %d bytes raw, write PNG" % FRAME_N)
+            print("would (strict --strict): full hashes + pre/post rechecks, "
+                  "~17 SSH ops")
             return 0
         if a == "--force":
             force = True
+        elif a == "--strict":
+            strict = True
         elif a == "--out" and i + 1 < len(argv):
             i += 1
             out_png = argv[i]
@@ -426,7 +510,7 @@ def main(argv):
                   file=sys.stderr)
             return 2
     try:
-        capture(out_png, out_raw, force)
+        capture(out_png, out_raw, force, strict)
     except Fail as ex:
         print("ABORT: %s" % ex, file=sys.stderr)
         return 1

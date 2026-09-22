@@ -25,12 +25,12 @@ Your key lives in `/home/root/.ssh/authorized_keys` on the tablet (on `/home`, s
 
 ## Observe–act–verify loop
 
-1. **Observe**: `rm2ctrl shot --out screen.png` ([02](references/02-display-screenshot.md) §2). On failure in strict mode: stop with the diagnostic (02 §3; assisted options only if the user allows a human step).
+1. **Observe**: prefer the feed when it is running: `rm2ctrl live shot --out screen.png` (instant local copy, [02](references/02-display-screenshot.md) §2). No feed? One-time `rm2ctrl shot --out screen.png` (fast single-check by default; `--strict` is the ~8 s backup). On failure in strict mode: stop with the diagnostic (02 §3; assisted options only if the user allows a human step).
 2. **Act**: one input (`rm2ctrl tap` / `rm2ctrl swipe`, [03](references/03-input-automation.md) §5; SVG line art via `rm2ctrl draw --run`) or file op ([04](references/04-files-content.md)); know the screen map ([05](references/05-ui-ux-map.md)). `rm2ctrl ssh -- <cmd>` runs a raw tablet command (ssh options before host, remote command after; use `--` to separate; dangerous ssh options need `--allow-unsafe-ssh-opts`, see [01](references/01-access-auth.md)).
-3. **Verify**: re-screenshot; e-ink needs 0.5–1.0 s settle after input. Never verify by forcing a refresh.
+3. **Verify**: re-screenshot from the feed; e-ink needs 0.5–1.0 s settle after input. Never verify by forcing a refresh.
 
  Timeouts: 2 s fail-fast probe, 5 s bulk-transfer default, `scripts/rm2ctrl-ssh.sh`
- honors `RM_CONNECT_TIMEOUT` (integer 1..30, default 5), so the 2 s probe needs `RM_CONNECT_TIMEOUT=2` or raw ssh/config. Tool choice: [06](references/06-tooling-ecosystem.md); loop discipline: [07](references/07-autonomy-loop.md).
+ honors `RM_CONNECT_TIMEOUT` (integer 1..30, default 5), so the 2 s probe needs `RM_CONNECT_TIMEOUT=2` or raw ssh/config. SSH reuse is built in (`RM_SSH_MUX=0` disables, `RM_SSH_PERSIST` tunes idle keep). Tool choice: [06](references/06-tooling-ecosystem.md); loop discipline: [07](references/07-autonomy-loop.md).
 
 ## Draw with the pen (working feature)
 

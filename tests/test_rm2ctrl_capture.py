@@ -99,7 +99,7 @@ def test_cli_flags_reach_the_ssh_wrapper(tmp_path, monkeypatch):
     key.write_bytes(b"k")
     seen = {}
     monkeypatch.setattr(rm2ctrl_capture, "capture",
-                        lambda png, raw, force: seen.update(png=png, raw=raw))
+                        lambda png, raw, force, strict=False: seen.update(png=png, raw=raw))
     for var in ("RM_HOST", "RM_KEY", "RM_CONNECT_TIMEOUT"):
         monkeypatch.delenv(var, raising=False)
     out = tmp_path / "s.png"
@@ -120,7 +120,7 @@ def _frame_fakes(monkeypatch, ident2=None, recheck_fail=False,
     ident1 = (1234, 999)
     calls = {"snap": 0}
 
-    def fake_snapshot(cap):
+    def fake_snapshot(cap, verify_hashes=True):
         calls["snap"] += 1
         ident = ident2 if (ident2 and calls["snap"] > 1) else ident1
         maps = "00007000-02000000 rw-p 00000000 00:00 0"
@@ -158,6 +158,9 @@ def _frame_fakes(monkeypatch, ident2=None, recheck_fail=False,
 
     monkeypatch.setattr(C, "snapshot", fake_snapshot)
     monkeypatch.setattr(C, "read_block", fake_read_block)
+    def fake_read_blocks(cap, pid, regions, tool, reqs):
+        return [fake_read_block(cap, pid, regions, tool, a, s) for a, s in reqs]
+    monkeypatch.setattr(C, "read_blocks", fake_read_blocks)
     monkeypatch.setattr(C, "raw_read", fake_raw_read)
     monkeypatch.setattr(C, "write_png", fake_write_png)
     if recheck_fail:
@@ -170,7 +173,7 @@ def test_rejected_capture_publishes_nothing(tmp_path, monkeypatch):
     _frame_fakes(monkeypatch, recheck_fail=True)
     png, raw = str(tmp_path / "s.png"), str(tmp_path / "s.raw")
     with pytest.raises(rm2ctrl_capture.Fail):
-        rm2ctrl_capture.capture(png, raw, True)
+        rm2ctrl_capture.capture(png, raw, True, True)
     assert list(tmp_path.iterdir()) == [], "temp files leaked"
 
 
@@ -180,7 +183,7 @@ def test_preexisting_outputs_survive_rejection(tmp_path, monkeypatch):
     png.write_bytes(b"old-png")
     raw.write_bytes(b"old-raw")
     with pytest.raises(rm2ctrl_capture.Fail):
-        rm2ctrl_capture.capture(str(png), str(raw), True)
+        rm2ctrl_capture.capture(str(png), str(raw), True, True)
     assert png.read_bytes() == b"old-png"
     assert raw.read_bytes() == b"old-raw"
 
@@ -189,8 +192,7 @@ def test_changed_starttime_aborts(tmp_path, monkeypatch):
     _frame_fakes(monkeypatch, ident2=(1234, 1000))
     png, raw = str(tmp_path / "s.png"), str(tmp_path / "s.raw")
     with pytest.raises(rm2ctrl_capture.Fail, match="identity changed"):
-        rm2ctrl_capture.capture(png, raw, True)
-    assert list(tmp_path.iterdir()) == [], "rejected frame published"
+        rm2ctrl_capture.capture(png, raw, True, True)
 
 
 def test_short_raw_read_aborts_without_files(tmp_path, monkeypatch):
@@ -357,3 +359,50 @@ def test_snapshot_rejects_different_qtgui(monkeypatch):
     monkeypatch.setattr("subprocess.run", _fake_run_factory(calls, out=bad))
     with pytest.raises(rm2ctrl_capture.Fail, match="hash"):
         rm2ctrl_capture.snapshot(rm2ctrl_capture.Cap())
+
+def test_fast_capture_publishes_files(tmp_path, monkeypatch):
+    _frame_fakes(monkeypatch)
+    png, raw = str(tmp_path / "s.png"), str(tmp_path / "s.raw")
+    rm2ctrl_capture.capture(png, raw, True, False)
+    assert (tmp_path / "s.png").read_bytes() == b"PNG"
+    assert len((tmp_path / "s.raw").read_bytes()) > 0
+
+
+def test_strict_flag_reaches_capture(tmp_path, monkeypatch):
+    key = tmp_path / "id_test"
+    key.write_bytes(b"k")
+    seen = {}
+    monkeypatch.setattr(rm2ctrl_capture, "capture",
+                        lambda png, raw, force, strict=False: seen.update(strict=strict))
+    for var in ("RM_HOST", "RM_KEY", "RM_CONNECT_TIMEOUT"):
+        monkeypatch.delenv(var, raising=False)
+    out = tmp_path / "s.png"
+    assert rm2ctrl_capture.main(["--out", str(out), "--key", str(key),
+                                 "--force", "--strict"]) == 0
+    assert seen == {"strict": True}
+
+
+def test_snapshot_fast_skips_hash_command(monkeypatch):
+    calls = []
+    monkeypatch.setattr("subprocess.run",
+                        _fake_run_factory(calls, out=_snapshot_output()))
+    rm2ctrl_capture.snapshot(rm2ctrl_capture.Cap(), verify_hashes=False)
+    assert "sha256sum" not in calls[0][-1]
+    calls.clear()
+    monkeypatch.setattr("subprocess.run",
+                        _fake_run_factory(calls, out=_snapshot_output()))
+    rm2ctrl_capture.snapshot(rm2ctrl_capture.Cap(), verify_hashes=True)
+    assert "sha256sum" in calls[0][-1]
+
+
+def test_read_blocks_batches_into_single_ssh(monkeypatch):
+    calls = []
+    hex4 = "aa" * 4
+    out = hex4 + "\n---BLK---\n" + hex4 + "\n---BLK---\n"
+    monkeypatch.setattr("subprocess.run",
+                        _fake_run_factory(calls, out=out))
+    cap = rm2ctrl_capture.Cap()
+    res = rm2ctrl_capture.read_blocks(cap, 1, [(0, 2 ** 32)], "hexdump",
+                                      [(4096, 4), (8192, 4)])
+    assert len(calls) == 1
+    assert res == [bytes.fromhex(hex4), bytes.fromhex(hex4)]

@@ -40,12 +40,30 @@ These override `RM_HOST` / `RM_KEY` / `RM_CONNECT_TIMEOUT`.
 ### `rm2ctrl shot`, screenshot (read-only)
 
 ```sh
-rm2ctrl shot [--out screen.png] [--raw frame.raw] [--force] [--dry-run]
+rm2ctrl shot [--out screen.png] [--raw frame.raw] [--force] [--strict] [--dry-run]
 ```
 
-Pulls xochitl's composed 1404×1872 page over SSH (~8 s). No taps,
-no refresh, no tablet changes. `--dry-run` prints the plan without
-touching the device. Strict hash gate: wrong firmware aborts loudly.
+Fast path by default: one snapshot (firmware + size, no sha256), batched
+metadata reads, one bulk transfer. About 3 SSH calls on a reused link
+(RM_SSH_MUX=0 disables reuse). No taps, no refresh, no tablet changes.
+`--dry-run` prints the plan without touching the device.
+`--strict` restores the full backup path: binary hashes plus pre/post
+rechecks (~17 SSH calls, ~8 s). Wrong firmware aborts loudly in both modes.
+
+### `rm2ctrl live`, persistent feed for instant shots
+
+```sh
+rm2ctrl live start [--interval 2] [--dir /tmp/rm2ctrl-live]
+rm2ctrl live shot --out screen.png
+rm2ctrl live status
+rm2ctrl live stop
+```
+
+`live start` runs a daemon that captures every few seconds into
+`/tmp/rm2ctrl-live/latest.png`. `live shot` is then just a local file copy,
+PC-fast, no SSH. Use it for observe-act-verify loops. Use one-time
+`rm2ctrl shot` when no daemon is running. The daemon keeps using the fast
+single-check path; `--strict` stays a manual one-time backup.
 
 ### `rm2ctrl tap`, finger tap
 

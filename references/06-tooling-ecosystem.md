@@ -13,12 +13,15 @@ input / files), and mixing planes causes flakiness.
 
 | Tool | Repo | Transport | Reported perf | Status | Use for |
 |---|---|---|---|---|---|
-| `scripts/rm2ctrl-capture.py` (this repo) | references/02-display-screenshot.md §2 | xochitl's composed QImage (1404×1872 RGB32) → raw dd over `rm2ctrl-ssh.sh` stdout → host PNG; pre/post rechecks | ~5 s per shot, ~16–30 SSH ops | Proven live 2026-09-16 on fw 20260827113527 | Headless single-shot capture with zero tablet setup; byte-exact repeats, tracks pen strokes |
+| `scripts/rm2ctrl-capture.py` fast (default) | references/02-display-screenshot.md §2 | xochitl's composed QImage (1404×1872 RGB32) → raw dd over reused `rm2ctrl-ssh.sh` link → host PNG; single check, no hashes | ~3 SSH ops, bulk ~1 s + single snapshot | Proven layout on fw 20260827113527 | Default one-time shot; zero tablet setup; byte-exact repeats, tracks pen strokes |
+| `scripts/rm2ctrl-capture.py --strict` (backup) | references/02-display-screenshot.md §2 | same, plus full hashes + pre/post rechecks | ~17 SSH ops, ~8.3 s measured | Proven live 2026-09-16 | One-time backup when hashes/rechecks matter |
+| `scripts/rm2ctrl-live.py` feed (`rm2ctrl live`) | references/02-display-screenshot.md §2 | daemon loops fast path every ~2 s; `live shot` is a local file copy | feed retrieval PC-fast (<0.1 s) after warm-up | New; needs no tablet step beyond SSH | Observe-act-verify loops; agent screenshots |
 | Official ScreenShare (+ rmview backend) | In-box firmware; https://github.com/bordaigorl/rmview | TLS VNC `:5900` + UDP `:5901` | Start ScreenShare on the tablet first (one manual tap) | Second option when 02 §2 fails; Paper Pro path |
 
 Backend picker:
 
-- 2026 fw (20260827113527) → `scripts/rm2ctrl-capture.py` (02 §2, no tablet step).
+- Loops → `rm2ctrl live start` once, then `rm2ctrl live shot` (02 §2, no tablet step).
+- Cold one-time → `rm2ctrl shot` (fast); `--strict` only when you need hashes/rechecks.
 - If it fails → stop on ABORT in strict mode (02 §3); ScreenShare/photo only if the user allows a human step.
 - USB (`10.11.99.1`) beats WiFi for every row.
 

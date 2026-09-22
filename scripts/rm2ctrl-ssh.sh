@@ -56,6 +56,12 @@ Environment:
                RM_KEY is an error).
   RM_CONNECT_TIMEOUT
                ConnectTimeout seconds (default: 5; must be an integer 1..30).
+  RM_SSH_MUX   Connection reuse: auto (default) shares one TCP link
+               across capture's many small calls; RM_SSH_MUX=0 disables.
+  RM_SSH_MUX_DIR
+               Control-socket dir (default ~/.ssh/rm2ctrl-mux, mode 0700).
+  RM_SSH_PERSIST
+               Idle seconds to keep the shared link (default 120).
 
 Notes:
 - Newer Dropbear (e.g. 2025.88) offers an ed25519 host key, older ones
@@ -371,7 +377,27 @@ elif [ "${KEY_EXPLICIT:-0}" -eq 1 ]; then
 else
   echo "note: no key file at $KEY; letting ssh use default identities/agent (set RM_KEY to pin one)" >&2
 fi
-SSH_BASE=(ssh -n ${KEY_ARGS[@]+"${KEY_ARGS[@]}"} -o BatchMode=yes -o ConnectTimeout="$CONNECT_TIMEOUT"
+# Built-in connection reuse. RM_SSH_MUX=0 disables; anything else enables.
+# Socket lives in a private dir so concurrent hosts never share it.
+MUX_ARGS=()
+if [ "${RM_SSH_MUX:-auto}" != "0" ]; then
+  _mux_base="${RM_SSH_MUX_DIR:-}"
+  if [ -z "$_mux_base" ]; then
+    if [ -n "${HOME:-}" ]; then
+      _mux_base="$HOME/.ssh/rm2ctrl-mux"
+    else
+      _mux_base="/tmp/rm2ctrl-mux-$(id -u 2>/dev/null || echo 0)"
+    fi
+  fi
+  if mkdir -p "$_mux_base" 2>/dev/null && chmod 700 "$_mux_base" 2>/dev/null; then
+    _persist="${RM_SSH_PERSIST:-120}"
+    case "$_persist" in
+      ""|*[!0-9]*) _persist=120 ;;
+    esac
+    MUX_ARGS=(-o ControlMaster=auto -o "ControlPath=$_mux_base/%r@%h:%p" -o "ControlPersist=$_persist")
+  fi
+fi
+SSH_BASE=(ssh -n ${KEY_ARGS[@]+"${KEY_ARGS[@]}"} ${MUX_ARGS[@]+"${MUX_ARGS[@]}"} -o BatchMode=yes -o ConnectTimeout="$CONNECT_TIMEOUT"
   -o ConnectionAttempts=1
   -o PasswordAuthentication=no
   -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa)
