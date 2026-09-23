@@ -43,9 +43,16 @@ git clone https://github.com/BedirT/remarkable-control-skill
 cd remarkable-control-skill
 export PATH="$PWD:$PATH"
 
-rm2ctrl shot --out screen.png   # see the tablet (~8 s)
+rm2ctrl shot --out screen.png   # see the tablet (fast, ~1 s)
 rm2ctrl tap 700 936             # tap center
 rm2ctrl shot --out verify.png   # prove the tap landed
+```
+
+For loops, keep a feed open once and copy frames instantly:
+
+```sh
+rm2ctrl live start               # daemon captures every ~2 s
+rm2ctrl live shot --out s.png    # local copy, ~0.04 s, no SSH
 ```
 
 First tablet use also needs the tiny input helper on the device:
@@ -53,10 +60,10 @@ First tablet use also needs the tiny input helper on the device:
 ```sh
 scp scripts/rm2ctrl-input/rm2ctrl-input root@10.11.99.1:/tmp/rm2ctrl-input
 ```
-
 | Command | What it does |
 |---|---|
-| `rm2ctrl shot [--out F]` | Screenshot, read-only. No taps, no refresh, no setup on the tablet. |
+| `rm2ctrl shot [--out F] [--strict]` | Screenshot, read-only. Fast single check by default (~1 s). `--strict` is the full-hash backup. No taps, no refresh, no setup on the tablet. |
+| `rm2ctrl live start / shot / status / stop` | Persistent feed. Daemon captures every ~2 s; `live shot` is an instant local copy for loops. |
 | `rm2ctrl tap X Y` | Finger tap at screen pixels (1404×1872). Bad coords rejected before anything runs. |
 | `rm2ctrl swipe X1 Y1 X2 Y2` | Finger swipe with a natural, finger-like profile. |
 | `rm2ctrl draw FILE.svg --run` | Draws SVG line art with the pen, one pen-down per shape. `--speed 1-5` sets the pace (default 2, careful tracing). Without `--run` it just prints the strokes. |
@@ -81,13 +88,14 @@ clone it, put its `rm2ctrl` command on your PATH, follow the README quickstart
 to connect over USB SSH, and take a first screen capture to prove the loop works.
 ```
 
-The skill routes every task through one loop: **observe** (`rm2ctrl
-shot`), **act** exactly once (`rm2ctrl tap`/`swipe`/`draw`), **verify**
-with another screenshot. E-ink needs ~1 s to settle; state is proven
-by capture, never assumed. Start at [SKILL.md](SKILL.md): it routes to
-seven references (access, display, input, files, screen map, tooling,
-loop discipline) and states the safety rules: never force a refresh,
-stop xochitl before writing its files, fail fast, never prompt.
+The skill routes every task through one loop: **observe** (prefer
+`rm2ctrl live shot`, else `rm2ctrl shot`), **act** exactly once
+(`rm2ctrl tap`/`swipe`/`draw`), **verify** with another screenshot.
+E-ink needs ~1 s to settle; state is proven by capture, never assumed.
+Start at [SKILL.md](SKILL.md): it routes to seven references (access,
+display, input, files, screen map, tooling, loop discipline) and states
+the safety rules: never force a refresh, stop xochitl before writing its
+files, fail fast, never prompt.
 
 ## Why this exists
 
@@ -105,11 +113,11 @@ where they matter and never mixed into rM2 procedures.
 ## Structure
 
 ```text
-rm2ctrl + CLI.md                control CLI (tap/swipe/shot/draw/ssh) + command reference
+rm2ctrl + CLI.md                control CLI (tap/swipe/shot/live/draw/ssh) + command reference
 SKILL.md                        thin router: connect, loop, safety
 references/                     01 access & auth, 02 display & screenshot, 03 input,
                                 04 files & content, 05 UI/UX map, 06 tooling, 07 autonomy loop
-scripts/                        rm2ctrl-capture.py, rm2ctrl-svg.py, rm2ctrl-ssh.sh, rm2ctrl-input/ (Rust helper)
+scripts/                        rm2ctrl-capture.py, rm2ctrl-live.py, rm2ctrl-svg.py, rm2ctrl-ssh.sh, rm2ctrl-input/ (Rust helper)
 tests/                          host-only suite, incl. test_rm2ctrl.py (no tablet needed)
 ```
 
